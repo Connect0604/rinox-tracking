@@ -106,13 +106,12 @@ body{
 @keyframes pulse{50%{opacity:.25}}
 
 /* ---------- stats ---------- */
+#overviewWrap{margin-top:16px}
 .stats{display:grid;grid-template-columns:1.25fr repeat(4,1fr);gap:12px;margin-bottom:16px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
   box-shadow:var(--shadow),var(--inset-hi)}
-.tile{padding:17px 19px;min-width:0;position:relative;overflow:hidden}
+.tile{padding:17px 19px;min-width:0;position:relative}
 .tile.hero{box-shadow:var(--shadow-lift),var(--inset-hi)}
-.tile.hero::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;
-  background:linear-gradient(90deg,var(--brand),var(--brand-2))}
 .tile .lbl{font-size:12px;color:var(--muted);margin:0 0 7px;letter-spacing:.01em}
 .tile .val{font-size:26px;font-weight:660;letter-spacing:-.02em;margin:0;line-height:1.1}
 .tile.hero .val{font-size:48px;font-weight:700;letter-spacing:-.035em}
