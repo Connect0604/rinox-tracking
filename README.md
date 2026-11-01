@@ -2,6 +2,24 @@
 
 A single-file, read-only dashboard over the **Rinox Tracking** Google Sheet.
 
+## Installing as a mobile app (PWA)
+
+The site is an installable Progressive Web App — same codebase, no App
+Store/Play Store needed:
+
+- **iPhone**: open the link in Safari → Share → **Add to Home Screen**.
+- **Android**: open the link in Chrome → ⋮ menu → **Install app** (or
+  **Add to Home Screen**).
+
+It then opens full-screen with its own icon, no browser address bar. A
+service worker (`sw.js`) caches the app shell so it opens instantly and
+still loads offline — but it never caches the live sheet data itself (see
+`sw.js` for why): offline, you get the app with a clear "Sync failed"
+state, never a stale number presented as current.
+
+To update the installed app after a change: just push to `main` — the
+service worker picks up the new shell within a page load or two.
+
 ## Overview tab
 
 The landing tab (`#overview`) is a business dashboard built from Live +

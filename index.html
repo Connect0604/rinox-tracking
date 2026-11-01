@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rinox Tracking</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e6432e'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='19' font-weight='700' fill='%23fff' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
+
+<!-- PWA: installable app shell -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e6432e">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rinox">
 <style>
 :root{
   color-scheme: light;
@@ -1399,6 +1408,14 @@ if(window.matchMedia){
 
 load();
 setInterval(load, AUTO_REFRESH_MS);
+
+/* PWA shell — registered last and best-effort: a failure here (e.g. running
+   from file://, where service workers are unsupported) never blocks the app. */
+if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
 
 })();
 </script>
