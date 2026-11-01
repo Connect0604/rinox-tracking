@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rinox Tracking</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e6432e'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='19' font-weight='700' fill='%23fff' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --page:#f9f9f7; --surface:#fcfcfb; --surface-2:#f2f1ed;
+  --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --line:#c3c2b7; --border:rgba(11,11,11,.10);
+  --accent:#2a78d6; --accent-soft:rgba(42,120,214,.10); --accent-track:#cde2fb;
+  --series-2:#eb6834; --series-2-track:#fbdac8;
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --critical:#d03b3b;
+  --good-ink:#006300; --critical-ink:#b12f2f;
+  --brand:#e6432e; --brand-ink:#e6432e;
+  --shadow:0 1px 2px rgba(11,11,11,.05), 0 8px 24px -12px rgba(11,11,11,.18);
+  --r:12px;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --surface-2:#232321;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --line:#383835; --border:rgba(255,255,255,.10);
+    --accent:#3987e5; --accent-soft:rgba(57,135,229,.16); --accent-track:#184f95;
+    --series-2:#d95926; --series-2-track:#6b2f12;
+    --good-ink:#0ca30c; --critical-ink:#e07474;
+    --brand:#f2563d; --brand-ink:#ff6b53;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --page:#0d0d0d; --surface:#1a1a19; --surface-2:#232321;
+  --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --line:#383835; --border:rgba(255,255,255,.10);
+  --accent:#3987e5; --accent-soft:rgba(57,135,229,.16); --accent-track:#184f95;
+  --series-2:#d95926; --series-2-track:#6b2f12;
+  --good-ink:#0ca30c; --critical-ink:#e07474;
+  --brand:#f2563d; --brand-ink:#ff6b53;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--page); color:var(--ink);
+  font-family:var(--sans); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 20px 72px}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.mark{width:36px;height:36px;border-radius:9px;background:var(--brand);color:#fff;
+  display:grid;place-items:center;font-weight:700;font-size:18px;flex:none;
+  font-family:"Segoe UI",system-ui,sans-serif;letter-spacing:-.02em}
+.brand h1{margin:0;font-size:19px;font-weight:650;letter-spacing:-.01em;
+  display:flex;align-items:baseline;gap:5px}
+.brand h1 .in{color:var(--brand-ink);font-weight:650}
+.brand p{margin:1px 0 0;font-size:12.5px;color:var(--muted)}
+.top .sp{flex:1 1 auto}
+.btn{
+  appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--ink);
+  font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;text-decoration:none;white-space:nowrap;
+}
+.btn:hover{background:var(--surface-2)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:transparent;color:#fff}
+.btn.primary:hover{filter:brightness(1.07)}
+.sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none}
+.dot.busy{background:var(--warn);animation:pulse 1s ease-in-out infinite}
+.dot.bad{background:var(--critical)}
+@keyframes pulse{50%{opacity:.25}}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:1.25fr repeat(4,1fr);gap:12px;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+.tile{padding:16px 18px;min-width:0}
+.tile .lbl{font-size:12px;color:var(--muted);margin:0 0 6px}
+.tile .val{font-size:26px;font-weight:650;letter-spacing:-.02em;margin:0;line-height:1.1}
+.tile.hero .val{font-size:46px;font-weight:680;letter-spacing:-.03em}
+.tile .sub{margin:6px 0 0;font-size:12.5px;color:var(--ink-2)}
+.tile .sub b{font-weight:600;color:var(--ink)}
+
+/* ---------- chart ---------- */
+.chart{padding:16px 18px;margin-bottom:12px}
+.chart h2{margin:0 0 2px;font-size:14px;font-weight:620}
+.chart .cap{margin:0 0 14px;font-size:12px;color:var(--muted)}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:12px;align-items:center;
+  font-size:12.5px;border-radius:7px;padding:1px 0}
+.bar .nm{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .track{height:12px;background:var(--grid);border-radius:4px;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px;
+  transition:width .35s ease}
+.bar .amt{color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12px}
+.bar:hover .nm,.bar:hover .amt{color:var(--ink)}
+
+/* ---------- overview dashboard ---------- */
+.qnote{margin:-2px 0 12px;font-size:12px;color:var(--muted);
+  display:flex;align-items:center;gap:6px}
+.qnote::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warn);flex:none}
+.ovgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+.ovgrid .span2{grid-column:span 2}
+.cv{position:relative;width:100%}
+.cv.h-trend{height:260px}
+.cv.h-bar{height:260px}
+.cv.h-donut{height:230px}
+.oplist{display:grid;gap:14px}
+.op{display:flex;flex-direction:column;gap:3px}
+.op .k{font-size:12px;color:var(--muted)}
+.op .v{font-size:19px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.op .v small{font-size:12px;font-weight:500;color:var(--ink-2);margin-left:5px}
+.flcard{padding:16px 18px}
+.flcard h2{margin:0 0 2px;font-size:14px;font-weight:620}
+.flcard .cap{margin:0 0 12px;font-size:12px;color:var(--muted)}
+.flrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--grid);
+  cursor:pointer}
+.flrow:first-child{border-top:0}
+.flrow:hover .flnm{color:var(--accent)}
+.flrow .flnm{font-weight:600;font-size:13px;flex:1 1 auto;min-width:0}
+.flrow .flsub{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:1px}
+.flrow .flamt{font-variant-numeric:tabular-nums;font-size:13px;color:var(--critical-ink);
+  font-weight:600;white-space:nowrap}
+@media (max-width:1100px){
+  .ovgrid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:760px){
+  .ovgrid{grid-template-columns:1fr}
+  .ovgrid .span2{grid-column:auto}
+}
+
+/* ---------- tabs + toolbar ---------- */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--grid);margin:18px 0 0;flex-wrap:wrap}
+.tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;
+  font:inherit;font-size:13.5px;color:var(--ink-2);padding:9px 13px;cursor:pointer;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.tab .n{color:var(--muted);font-weight:400;font-size:12px;margin-left:5px}
+
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 12px}
+.tools[hidden],.tablewrap[hidden]{display:none}
+input[type=search],select{
+  font:inherit;font-size:13px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--border);border-radius:9px;padding:7px 11px;min-width:0
+}
+input[type=search]{flex:1 1 230px;max-width:340px}
+select{max-width:190px}
+input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.tools .sp{flex:1 1 auto}
+.count{font-size:12.5px;color:var(--muted);white-space:nowrap}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);
+  background:var(--surface);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+thead th{
+  position:sticky;top:0;z-index:2;background:var(--surface);text-align:left;font-weight:600;
+  font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);
+  padding:10px 12px;border-bottom:1px solid var(--grid);white-space:nowrap
+}
+thead th.s{cursor:pointer;user-select:none}
+thead th.s:hover{color:var(--ink)}
+thead th .ar{opacity:.45;font-size:10px}
+tbody tr{border-bottom:1px solid var(--grid);cursor:pointer}
+tbody tr:last-child{border-bottom:0}
+tbody tr:hover{background:var(--accent-soft)}
+tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+td{padding:10px 12px;vertical-align:top}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.strong{font-weight:600}
+.sub2{color:var(--muted);font-size:11.5px;margin-top:2px}
+.clip{display:block;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clip.w2{max-width:170px}
+.empty{padding:48px 20px;text-align:center;color:var(--muted)}
+.empty.err{color:var(--critical-ink)}
+
+/* ---------- chips ---------- */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;
+  padding:2.5px 8px;border-radius:999px;border:1px solid var(--border);
+  background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.chip .sq{width:7px;height:7px;border-radius:2px;flex:none}
+.chip.good{color:var(--good-ink)} .chip.good .sq{background:var(--good)}
+.chip.warn .sq{background:var(--warn)}
+.chip.serious .sq{background:var(--serious)}
+.chip.critical{color:var(--critical-ink)} .chip.critical .sq{background:var(--critical)}
+.chip.info .sq{background:var(--accent)}
+.chip.mute .sq{background:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+
+/* ---------- modal ---------- */
+.ov{position:fixed;inset:0;background:rgba(11,11,11,.45);backdrop-filter:blur(2px);
+  display:flex;justify-content:flex-end;z-index:50}
+.ov[hidden]{display:none}
+.panel{background:var(--surface);width:min(620px,100%);height:100%;overflow-y:auto;
+  border-left:1px solid var(--border);animation:slide .18s ease}
+@keyframes slide{from{transform:translateX(24px);opacity:.4}}
+.phead{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--grid);
+  padding:16px 20px;display:flex;gap:12px;align-items:flex-start;z-index:1}
+.phead h2{margin:0;font-size:17px;font-weight:640;letter-spacing:-.01em}
+.phead p{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+.x{appearance:none;background:none;border:0;color:var(--muted);font-size:22px;line-height:1;
+  cursor:pointer;padding:2px 6px;border-radius:7px;margin-left:auto}
+.x:hover{background:var(--surface-2);color:var(--ink)}
+.pbody{padding:6px 20px 32px}
+.sec{margin-top:20px}
+.sec h3{margin:0 0 9px;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);font-weight:600}
+.kv{display:grid;grid-template-columns:155px 1fr;gap:7px 14px;font-size:13px}
+.kv dt{color:var(--muted);min-width:0}
+.kv dd{margin:0;color:var(--ink);word-break:break-word}
+.kv dd .more{display:block;color:var(--ink-2);font-size:12.5px}
+.money{font-variant-numeric:tabular-nums}
+.note{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+  padding:11px 13px;font-size:13px;color:var(--ink-2);white-space:pre-wrap}
+
+.foot{margin-top:26px;font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.foot a{color:var(--accent)}
+
+@media (max-width:1100px){
+  .stats{grid-template-columns:1fr 1fr}
+  .tile.hero{grid-column:1/-1}
+}
+@media (max-width:760px){
+  .wrap{padding:14px 13px 60px}
+  .stats{grid-template-columns:1fr}
+  .tablewrap{overflow-x:visible;background:transparent;border:0;box-shadow:none}
+  table,thead,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  tbody tr{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+    margin-bottom:10px;padding:4px 2px;box-shadow:var(--shadow)}
+  td{display:grid;grid-template-columns:118px 1fr;gap:10px;padding:7px 13px;border:0}
+  td.num{text-align:left}
+  td::before{content:attr(data-l);color:var(--muted);font-size:11.5px;text-transform:uppercase;
+    letter-spacing:.03em;padding-top:1px}
+  td:empty{display:none}
+  .clip,.clip.w2{max-width:none;white-space:normal}
+  .bar{grid-template-columns:minmax(70px,110px) 1fr auto}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="mark">R</div>
+    <div class="brand">
+      <h1>Rinox<span class="in">India</span></h1>
+      <p>Connecting Markets, Creating Value. · Shipment &amp; payment tracker</p>
+    </div>
+    <div class="sp"></div>
+    <div class="sync"><span class="dot busy" id="dot"></span><span id="syncTxt">Loading…</span></div>
+    <button class="btn" id="refresh">Refresh</button>
+    <a class="btn" id="sheetLink" target="_blank" rel="noopener">Open sheet ↗</a>
+  </header>
+
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+
+  <section id="overviewWrap" hidden>
+
+    <section class="stats" id="ovStats" aria-label="Business summary"></section>
+    <p class="qnote" id="ovQuality" hidden></p>
+
+    <div class="ovgrid">
+      <section class="card chart span2" id="cardTrend">
+        <h2>Revenue by month</h2>
+        <p class="cap">Invoiced value, Live + Completed, USD</p>
+        <div class="cv h-trend"><canvas id="chTrend"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardClaims">
+        <h2>Claims</h2>
+        <p class="cap">Settled vs open, by claim value</p>
+        <div class="cv h-donut"><canvas id="chClaims"></canvas></div>
+      </section>
+
+      <section class="card chart span2" id="cardBuyers">
+        <h2>Buyer exposure</h2>
+        <p class="cap">Top buyers — invoiced vs still outstanding, USD</p>
+        <div class="cv h-bar"><canvas id="chBuyers"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardSuppliers">
+        <h2>Top suppliers</h2>
+        <p class="cap">By invoiced value, USD</p>
+        <div class="cv h-bar"><canvas id="chSuppliers"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardMaterial">
+        <h2>Material mix</h2>
+        <p class="cap">By shipped quantity, MT</p>
+        <div class="cv h-donut"><canvas id="chMaterial"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardOrigin">
+        <h2>Origin mix</h2>
+        <p class="cap">By invoiced value, USD</p>
+        <div class="cv h-donut"><canvas id="chOrigin"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardOps">
+        <h2>Operations</h2>
+        <p class="cap">Across live &amp; completed shipments</p>
+        <div class="oplist" id="ovOps"></div>
+      </section>
+    </div>
+
+    <section class="card flcard" id="cardFollowup" hidden>
+      <h2>Needs follow-up</h2>
+      <p class="cap">Marked complete, but no payment confirmation found in remarks</p>
+      <div id="ovFollowup"></div>
+    </section>
+
+  </section>
+
+  <div class="tools" id="toolsWrap">
+    <input type="search" id="q" placeholder="Search contract, BL, container, material, party…" aria-label="Search">
+    <select id="fSupplier" aria-label="Filter by supplier"><option value="">All suppliers</option></select>
+    <select id="fBuyer" aria-label="Filter by buyer"><option value="">All buyers</option></select>
+    <select id="fOrigin" aria-label="Filter by origin"><option value="">All origins</option></select>
+    <button class="btn" id="clear">Clear</button>
+    <div class="sp"></div>
+    <span class="count" id="count"></span>
+    <button class="btn" id="csv">Export CSV</button>
+  </div>
+
+  <div class="tablewrap" id="tableWrapEl"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+
+  <div class="foot">
+    <span>Read-only view — edits are made in Google Sheets.</span>
+    <span id="footSync"></span>
+  </div>
+</div>
+
+<div class="ov" id="ov" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <div class="panel" id="panel">
+    <div class="phead">
+      <div style="min-width:0">
+        <h2 id="pTitle"></h2>
+        <p id="pSub"></p>
+      </div>
+      <button class="x" id="close" aria-label="Close">×</button>
+    </div>
+    <div class="pbody" id="pBody"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.6.1/chart.umd.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ============================ config ============================ */
+var SHEET_ID = "1lqHQzUgAn3dg8QbH2T0qJ_FRGLq_0GFp1ZuGYFmUdQU";
+var SHEET_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/edit";
+var AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+var TABS = [
+  { key:"overview",  sheet:null,                       label:"Overview",  kind:"overview" },
+  { key:"live",      sheet:"LIVE",                     label:"Live",      kind:"shipment" },
+  { key:"completed", sheet:"COMPLETED",                label:"Completed", kind:"shipment" },
+  { key:"claims",    sheet:"CLAIMS Dong-A , SHINSUNG", label:"Claims",    kind:"claim"    }
+];
+
+/* Canonical fields, matched against the sheet's own header labels so inserting
+   a column in Sheets does not break the mapping. `occ` disambiguates the two
+   columns the sheet both names FINAL DESTINATION. */
+var SHIPMENT_FIELDS = [
+  { k:"tsNo",         h:["TSNO"],                        g:"Contract",  lbl:"TS no" },
+  { k:"supplier",     h:["SUPPLIERNAME"],                g:"Contract",  lbl:"Supplier" },
+  { k:"buyer",        h:["BUYERNAME"],                   g:"Contract",  lbl:"Buyer" },
+  { k:"contractNo",   h:["CONTRACTNO"],                  g:"Contract",  lbl:"Contract no" },
+  { k:"contractDate", h:["CONTRACTDATE"],                g:"Contract",  lbl:"Contract date" },
+  { k:"origin",       h:["ORIGIN"],                      g:"Contract",  lbl:"Origin" },
+  { k:"paymentTerms", h:["PAYMENTTERMS"],                g:"Contract",  lbl:"Payment terms" },
+
+  { k:"material",     h:["MATERIAL"],                    g:"Cargo",     lbl:"Material" },
+  /* a per-MT rate, so never summed across a contract's lot lines */
+  { k:"priceUsd",     h:["PRICEINUSD"],                  g:"Cargo",     lbl:"Price / MT (USD)" },
+  { k:"contractQty",  h:["CONTRACTQNTYINMT"],            g:"Cargo",     lbl:"Contract qty (MT)", n:1 },
+  { k:"lot",          h:["LOT"],                         g:"Cargo",     lbl:"Lot" },
+  { k:"shippedQty",   h:["SHIPPEDQNTYMT"],               g:"Cargo",     lbl:"Shipped qty (MT)", n:1 },
+
+  { k:"pol",          h:["PORTOFLOADING"],               g:"Logistics", lbl:"Port of loading" },
+  { k:"pod",          h:["PORTOFDISCHARGE"],             g:"Logistics", lbl:"Port of discharge" },
+  { k:"finalDest",    h:["FINALDESTINATION"], occ:1,     g:"Logistics", lbl:"Final destination" },
+  { k:"shippingLine", h:["SHIPINGLINE","SHIPPINGLINE"],  g:"Logistics", lbl:"Shipping line" },
+  { k:"blNo",         h:["BLNO"],                        g:"Logistics", lbl:"BL no" },
+  { k:"containerNo",  h:["CONTAINERNO"],                 g:"Logistics", lbl:"Container no" },
+  { k:"etd",          h:["ETD"],                         g:"Logistics", lbl:"ETD" },
+  { k:"eta",          h:["ETA"],                         g:"Logistics", lbl:"ETA" },
+  { k:"finalDestEta", h:["FINALDESTINATION"], occ:2,     g:"Logistics", lbl:"ETA final destination" },
+
+  { k:"invoice",      h:["INVOICE"],                     g:"Financials",lbl:"Invoice no" },
+  { k:"invoiceValue", h:["INVOICEVALUEUSD"],             g:"Financials",lbl:"Invoice value (USD)", n:1 },
+  { k:"advanceValue", h:["ADVANCEVALUEUSD"],             g:"Financials",lbl:"Advance received (USD)", n:1 },
+  { k:"balanceValue", h:["BALINVOICEVALUE"],             g:"Financials",lbl:"Balance due (USD)", n:1 },
+
+  { k:"courierName",  h:["COURIERNAME"],                 g:"Documents", lbl:"Courier" },
+  { k:"courierAwb",   h:["COURIERAWBNO"],                g:"Documents", lbl:"AWB no" },
+  { k:"courierDate",  h:["COURIERDATE"],                 g:"Documents", lbl:"Couriered on" },
+  { k:"courierEta",   h:["ETADATEOFCOURIER"],            g:"Documents", lbl:"Courier ETA" },
+  { k:"docsReceived", h:["FINALDOCUMENTSRECEIVEDATE"],   g:"Documents", lbl:"Final docs received" },
+
+  { k:"remarks",      h:["REMARKS"],                     g:"Remarks",   lbl:"Remarks" }
+];
+
+var CLAIM_FIELDS = [
+  { k:"buyer",      h:["BUYERNAME"],        g:"Claim", lbl:"Buyer" },
+  { k:"contractNo", h:["CONTRACTNO"],       g:"Claim", lbl:"Contract no" },
+  { k:"material",   h:["MATERIAL"],         g:"Claim", lbl:"Material" },
+  { k:"claimValue", h:["CLAIMVALUSUSD","CLAIMVALUEUSD","CLAIMVALUS"], g:"Claim", lbl:"Claim value (USD)", n:1 },
+  { k:"status",     h:["STATUS"],           g:"Claim", lbl:"Status" }
+];
+
+var GROUPS = ["Contract","Cargo","Logistics","Financials","Documents","Remarks"];
+
+/* ============================ helpers ============================ */
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.className=cls;
+  if(txt!=null) e.textContent=txt; return e; }
+function norm(s){ return String(s==null?"":s).toUpperCase().replace(/[^A-Z0-9]/g,""); }
+function clean(s){ return String(s==null?"":s).replace(/\r/g," ").replace(/[ \t]+/g," ").trim(); }
+
+function money(n, dp){
+  if(n==null || isNaN(n)) return "—";
+  var d = dp==null?0:dp;
+  return (n<0?"-$":"$") + Math.abs(n).toLocaleString("en-US",
+    {minimumFractionDigits:d, maximumFractionDigits:d});
+}
+function compact(n){
+  if(n==null || isNaN(n)) return "—";
+  var a=Math.abs(n), s=n<0?"-$":"$";
+  if(a>=1e6) return s+(a/1e6).toFixed(a>=1e7?1:2).replace(/\.?0+$/,"")+"M";
+  if(a>=1e3) return s+(a/1e3).toFixed(a>=1e4?0:1).replace(/\.0$/,"")+"K";
+  return s+a.toLocaleString("en-US",{maximumFractionDigits:0});
+}
+function qty(n){
+  if(n==null || isNaN(n)) return "—";
+  return n.toLocaleString("en-US",{maximumFractionDigits:3});
+}
+
+/* The sheet writes dates as text (dd.mm.yyyy, d.m.yy) and occasionally as
+   "17 June 2025" or a real Sheets date. Parse what we can; ignore the rest. */
+function parseDate(s){
+  s = clean(s);
+  if(!s || s==="-") return null;
+  var m = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})$/);
+  if(m){
+    var y=+m[3]; if(y<100) y+=2000;
+    var d=new Date(y, +m[2]-1, +m[1]);
+    return isNaN(d.getTime())?null:d;
+  }
+  if(/^\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}$/.test(s) || /^[A-Za-z]{3,}\s+\d{1,2},?\s+\d{4}$/.test(s)){
+    var p=new Date(s); return isNaN(p.getTime())?null:p;
+  }
+  return null;
+}
+function gvizDate(v){
+  var m = /^Date\((\d+),(\d+),(\d+)/.exec(v);
+  if(!m) return null;
+  return new Date(+m[1], +m[2], +m[3]);
+}
+function fmtDate(d){
+  if(!d) return "—";
+  return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+}
+function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+
+function cellText(c){
+  if(!c) return "";
+  if(typeof c.v === "string" && /^Date\(/.test(c.v)){
+    var d=gvizDate(c.v); if(d) return fmtDate(d);
+  }
+  if(c.f!=null && c.f!=="") return clean(c.f);
+  if(c.v==null || c.v==="") return "";
+  if(typeof c.v==="boolean") return c.v?"Yes":"No";
+  return clean(c.v);
+}
+function cellNum(c){
+  if(!c || c.v==null || c.v==="") return null;
+  if(typeof c.v==="number") return c.v;
+  var n = parseFloat(String(c.v).replace(/[(),\s]/g,"").replace(/[^0-9.\-]/g,""));
+  return isNaN(n)?null:n;
+}
+
+/* ============================ JSONP loader ============================
+   gviz replies as a script call, which works from file:// as well as from any
+   host — no CORS preflight, no server, no API key. */
+var seq = 0;
+function fetchSheet(name){
+  return new Promise(function(resolve, reject){
+    var cb = "__rinox_cb_" + (++seq);
+    var s = document.createElement("script");
+    var timer = setTimeout(function(){ done(); reject(new Error("Timed out reaching Google Sheets.")); }, 25000);
+    function done(){ clearTimeout(timer); try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
+      if(s.parentNode) s.parentNode.removeChild(s); }
+    window[cb] = function(res){
+      done();
+      if(!res || res.status==="error"){
+        var msg = (res && res.errors || []).map(function(e){
+          return e.detailed_message || e.message; }).join("; ");
+        reject(new Error(msg || "Google Sheets rejected the query."));
+      } else resolve(res.table);
+    };
+    s.onerror = function(){ done(); reject(new Error("Could not load the sheet (offline, or access revoked).")); };
+    s.src = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/gviz/tq"
+          + "?tqx=" + encodeURIComponent("out:json;responseHandler:" + cb)
+          + "&sheet=" + encodeURIComponent(name)
+          + "&headers=1&tq=&_=" + Date.now();
+    document.head.appendChild(s);
+  });
+}
+
+/* ============================ parsing ============================ */
+function buildMap(cols, defs){
+  var map = {}, seen = {};
+  cols.forEach(function(c, i){
+    var n = norm(c.label);
+    if(!n) return;
+    seen[n] = (seen[n]||0) + 1;
+    for(var j=0;j<defs.length;j++){
+      var d = defs[j];
+      if(map[d.k]!==undefined) continue;
+      if(d.h.indexOf(n) === -1) continue;
+      if((d.occ||1) !== seen[n]) continue;
+      map[d.k] = i; return;
+    }
+  });
+  return map;
+}
+
+/* A contract can span several sheet rows (one per lot / container), with the
+   shared cells merged. Those continuation rows come back blank, so a row that
+   carries no identity is folded into the record above it. */
+function parseRecords(table, defs, kind){
+  var map = buildMap(table.cols, defs);
+  var idKeys = kind==="claim" ? ["buyer","contractNo"] : ["tsNo","supplier","contractNo"];
+  var recs = [];
+
+  (table.rows||[]).forEach(function(r, ri){
+    var cells = r.c || [];
+    var get = function(k){ return map[k]===undefined ? null : cells[map[k]]; };
+
+    var startsNew = idKeys.some(function(k){ return cellText(get(k)) !== ""; });
+    var any = defs.some(function(d){ return cellText(get(d.k)) !== ""; });
+    if(!any) return;
+    if(!startsNew && recs.length === 0) startsNew = true;
+
+    var rec;
+    if(startsNew){
+      rec = { vals:{}, sum:{}, lines:0, row:ri+2 };
+      recs.push(rec);
+    } else {
+      rec = recs[recs.length-1];
+      rec.lines++;
+    }
+
+    defs.forEach(function(d){
+      var c = get(d.k);
+      var t = cellText(c);
+      if(t && t !== "-"){
+        if(!rec.vals[d.k]) rec.vals[d.k] = [];
+        if(rec.vals[d.k].indexOf(t) === -1) rec.vals[d.k].push(t);
+      }
+      if(d.n){
+        var n = cellNum(c);
+        if(n != null) rec.sum[d.k] = (rec.sum[d.k]||0) + n;
+      }
+    });
+  });
+
+  /* Rows holding nothing but a TS number are placeholders typed ahead of the
+     contract; they are not shipments. */
+  recs = recs.filter(function(rec){
+    return Object.keys(rec.vals).some(function(k){ return k !== "tsNo"; })
+        || Object.keys(rec.sum).length > 0;
+  });
+
+  recs.forEach(function(rec){ decorate(rec, kind); });
+  return recs;
+}
+
+function v(rec, k){ var a = rec.vals[k]; return a && a.length ? a[0] : ""; }
+function vAll(rec, k){ return rec.vals[k] || []; }
+
+function decorate(rec, kind){
+  if(kind === "claim"){
+    /* STATUS is merged over the contract's material lines, so the first value
+       in the block governs it; any further values are surfaced, not averaged. */
+    var all = vAll(rec,"status");
+    var st = norm(all[0] || "");
+    rec.settled = st.indexOf("SETTLED") === 0;
+    rec.statusExtra = all.length - 1;
+    rec.search = JSON.stringify(rec.vals).toLowerCase();
+    return;
+  }
+  rec.etdDate = parseDate(v(rec,"etd"));
+  rec.etaDate = parseDate(v(rec,"eta"));
+  rec.docsDate = parseDate(v(rec,"docsReceived"));
+
+  /* Furthest milestone reached. */
+  if(v(rec,"docsReceived"))      rec.stage = { t:"Docs received", c:"good" };
+  else if(v(rec,"courierDate"))  rec.stage = { t:"Docs sent",     c:"info" };
+  else if(v(rec,"blNo") || v(rec,"etd")) rec.stage = { t:"In transit", c:"info" };
+  else                           rec.stage = { t:"Contract",      c:"mute" };
+
+  var inv = rec.sum.invoiceValue, adv = rec.sum.advanceValue, bal = rec.sum.balanceValue;
+  rec.settledPay = !!(inv && bal != null && bal <= 0);
+  if(rec.settledPay)        rec.pay = { t:"Settled",      c:"good" };
+  else if(inv && adv)       rec.pay = { t:"Part paid",    c:"warn" };
+  else if(inv)              rec.pay = { t:"Unpaid",       c:"serious" };
+  else if(adv)              rec.pay = { t:"Advance paid", c:"warn" };
+  else                      rec.pay = { t:"Not invoiced", c:"mute" };
+
+  rec.search = JSON.stringify(rec.vals).toLowerCase();
+}
+
+function etaChip(rec, today){
+  if(!rec.etaDate) return null;
+  var d = daysBetween(today, rec.etaDate);
+  if(rec.docsDate) return null;
+  if(d < 0)  return { t:"Arrived " + Math.abs(d) + "d ago", c: d < -14 ? "critical" : "warn" };
+  if(d <= 7) return { t:"ETA in " + d + "d", c:"warn" };
+  return null;
+}
+
+/* ============================ state ============================ */
+function tabFromHash(){
+  var h = (location.hash || "").replace(/^#/,"").toLowerCase();
+  return TABS.some(function(t){ return t.key === h; }) ? h : "overview";
+}
+var state = { tab:tabFromHash(), data:{}, err:{}, sort:{}, q:"", supplier:"", buyer:"", origin:"", synced:null };
+var today = new Date(); today.setHours(0,0,0,0);
+
+function current(){ return TABS.filter(function(t){ return t.key===state.tab; })[0]; }
+function recs(key){ return state.data[key] || []; }
+
+/* ============================ loading ============================ */
+function load(){
+  $("dot").className = "dot busy";
+  $("syncTxt").textContent = "Syncing…";
+  var jobs = TABS.filter(function(t){ return t.sheet; }).map(function(t){
+    return fetchSheet(t.sheet).then(function(table){
+      state.data[t.key] = parseRecords(table, t.kind==="claim"?CLAIM_FIELDS:SHIPMENT_FIELDS, t.kind);
+      state.err[t.key] = null;
+    }).catch(function(e){
+      state.data[t.key] = state.data[t.key] || [];
+      state.err[t.key] = e.message || String(e);
+    });
+  });
+  return Promise.all(jobs).then(function(){
+    var sheetTabs = TABS.filter(function(t){ return t.sheet; });
+    var failed = sheetTabs.filter(function(t){ return state.err[t.key]; });
+    state.synced = new Date();
+    if(failed.length === sheetTabs.length){
+      $("dot").className = "dot bad";
+      $("syncTxt").textContent = "Sync failed";
+    } else {
+      $("dot").className = "dot" + (failed.length ? " bad" : "");
+      $("syncTxt").textContent = "Synced " + state.synced.toLocaleTimeString("en-GB",
+        {hour:"2-digit",minute:"2-digit"}) + (failed.length ? " (partial)" : "");
+    }
+    $("footSync").textContent = state.synced ? "Last read from the sheet at " +
+      state.synced.toLocaleString("en-GB") : "";
+    renderAll();
+  });
+}
+
+function tile(mod, label, val, sub){
+  var c = el("div", "card tile" + (mod ? " " + mod : ""));
+  c.appendChild(el("p","lbl",label));
+  c.appendChild(el("p","val",val));
+  if(sub) c.appendChild(el("p","sub",sub));
+  return c;
+}
+
+/* ============================ overview analytics ============================
+   The sheet carries no supplier cost, so these are revenue/turnover and
+   collections figures, not profit. Two upstream data quirks are corrected
+   here rather than trusted blindly — see the comments below. */
+
+/* The two oldest COMPLETED contracts predate the current column layout:
+   every field past CONTRACT NO is shifted one cell left (a courier AWB number
+   even lands in ADVANCE VALUE). Detected, not guessed: a MATERIAL cell that is
+   pure digits, or an ORIGIN cell that is actually a date, is the tell. */
+function isCleanShipment(rec){
+  var mat = v(rec,"material"), org = v(rec,"origin");
+  if(mat && /^[\d.]+$/.test(mat)) return false;
+  if(org && /^\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}$/.test(org)) return false;
+  return true;
+}
+/* BAL INVOICE VALUE is never zeroed out once a deal moves to COMPLETED, so a
+   completed contract's own REMARKS are the more trustworthy signal. */
+function paymentConfirmed(rec){
+  return /PAID|PAYMENT\s*(RECEIVED|DONE)/i.test(vAll(rec,"remarks").join(" "));
+}
+
+function computeOverview(){
+  var liveAll = recs("live"), compAll = recs("completed"), claims = recs("claims");
+  var live = liveAll.filter(isCleanShipment);
+  var comp = compAll.filter(isCleanShipment);
+  var excluded = (liveAll.length - live.length) + (compAll.length - comp.length);
+  var all = live.concat(comp);
+
+  var followUp = comp.filter(function(r){
+    return (r.sum.balanceValue||0) > 1 && !paymentConfirmed(r);
+  });
+  var followUpSet = {}; followUp.forEach(function(r){ followUpSet[r.row] = 1; });
+
+  var revenue = all.reduce(function(a,r){ return a + (r.sum.invoiceValue||0); }, 0);
+
+  var collectedLive = live.reduce(function(a,r){
+    return a + (r.sum.invoiceValue||0) - Math.max(r.sum.balanceValue||0,0); }, 0);
+  var outstandingLive = live.reduce(function(a,r){
+    return a + Math.max(r.sum.balanceValue||0,0); }, 0);
+  var collectedComp = comp.reduce(function(a,r){
+    if(followUpSet[r.row]) return a + (r.sum.invoiceValue||0) - (r.sum.balanceValue||0);
+    return a + (r.sum.invoiceValue||0);
+  }, 0);
+  var outstandingComp = followUp.reduce(function(a,r){ return a + (r.sum.balanceValue||0); }, 0);
+
+  var shippedMT = all.reduce(function(a,r){ return a + (r.sum.shippedQty||0); }, 0);
+
+  var claimTotal = claims.reduce(function(a,c){ return a + (c.sum.claimValue||0); }, 0);
+  var claimSettled = claims.filter(function(c){ return c.settled; });
+  var claimSettledVal = claimSettled.reduce(function(a,c){ return a + (c.sum.claimValue||0); }, 0);
+  var claimOpenVal = claimTotal - claimSettledVal;
+
+  /* monthly revenue, split live vs completed */
+  var monthMap = {};
+  all.forEach(function(r){
+    var d = parseDate(v(r,"contractDate"));
+    if(!d) return;
+    var key = d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2);
+    if(!monthMap[key]) monthMap[key] = { d:new Date(d.getFullYear(),d.getMonth(),1), live:0, comp:0 };
+    var isLive = live.indexOf(r) !== -1;
+    monthMap[key][isLive?"live":"comp"] += (r.sum.invoiceValue||0);
+  });
+  var months = Object.keys(monthMap).sort().map(function(k){ return monthMap[k]; });
+
+  function topN(map, n){
+    var rows = Object.keys(map).map(function(k){ return {k:k, v:map[k]}; })
+                     .sort(function(a,b){ return b.v - a.v; });
+    var top = rows.slice(0,n), rest = rows.slice(n);
+    var other = rest.reduce(function(a,r){ return a+r.v; }, 0);
+    if(other > 0) top.push({k:"Other", v:other});
+    return top;
+  }
+
+  var bySupplier = {};
+  all.forEach(function(r){ var k=v(r,"supplier")||"(blank)"; bySupplier[k]=(bySupplier[k]||0)+(r.sum.invoiceValue||0); });
+
+  var byBuyerInv = {}, byBuyerOut = {}, byBuyerRef = {};
+  all.forEach(function(r){
+    var k = v(r,"buyer") || "(blank)";
+    byBuyerInv[k] = (byBuyerInv[k]||0) + (r.sum.invoiceValue||0);
+    var out = live.indexOf(r)!==-1 ? Math.max(r.sum.balanceValue||0,0)
+            : (followUpSet[r.row] ? (r.sum.balanceValue||0) : 0);
+    byBuyerOut[k] = (byBuyerOut[k]||0) + out;
+    byBuyerRef[k] = r;
+  });
+
+  var byMaterial = {};
+  all.forEach(function(r){ var k=v(r,"material")||"(blank)"; byMaterial[k]=(byMaterial[k]||0)+(r.sum.shippedQty||0); });
+
+  var byOrigin = {};
+  all.forEach(function(r){ var k=(v(r,"origin")||"(blank)").toUpperCase(); byOrigin[k]=(byOrigin[k]||0)+(r.sum.invoiceValue||0); });
+
+  /* operational: shipping transit (ETD->ETA), booking lead time (contract->ETD),
+     live shipments flagged overdue without final docs.
+     COURIER DATE vs FINAL DOCUMENTS RECEIVE DATE was tried as a third metric,
+     but on this sheet the "received" date precedes "courier date" more often
+     than not (9 of 15 pairs) — the two columns don't track a single forward
+     pipeline, so no turnaround figure is computed from them. */
+  var transit = [], leadTime = [];
+  all.forEach(function(r){
+    var etd = parseDate(v(r,"etd")), eta = parseDate(v(r,"eta"));
+    if(etd && eta){ var t = daysBetween(etd,eta); if(t >= 0 && t < 200) transit.push(t); }
+    var cd = parseDate(v(r,"contractDate"));
+    if(cd && etd){ var u = daysBetween(cd,etd); if(u >= 0 && u < 180) leadTime.push(u); }
+  });
+  var avg = function(a){ return a.length ? a.reduce(function(x,y){return x+y;},0)/a.length : null; };
+  var overdue = liveAll.filter(function(r){ var c = etaChip(r, today); return c && c.c==="critical"; }).length;
+
+  return {
+    live:live, comp:comp, excluded:excluded, followUp:followUp,
+    revenue:revenue, collected:collectedLive+collectedComp, outstanding:outstandingLive+outstandingComp,
+    shippedMT:shippedMT, claimTotal:claimTotal, claimSettledVal:claimSettledVal, claimOpenVal:claimOpenVal,
+    claimSettledN:claimSettled.length, claimOpenN:claims.length-claimSettled.length,
+    months:months, bySupplier:topN(bySupplier,8), byBuyer:Object.keys(byBuyerInv).map(function(k){
+        return {k:k, inv:byBuyerInv[k], out:byBuyerOut[k]||0};
+      }).sort(function(a,b){ return b.inv-a.inv; }).slice(0,8),
+    byBuyerRef:byBuyerRef,
+    byMaterial:topN(byMaterial,3), byOrigin:topN(byOrigin,3),
+    avgTransit:avg(transit), avgLeadTime:avg(leadTime), overdue:overdue, liveCount:liveAll.length
+  };
+}
+
+/* ---------- Chart.js rendering ---------- */
+var charts = {};
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function chartTheme(){
+  return {
+    ink: cssVar("--ink"), ink2: cssVar("--ink-2"), muted: cssVar("--muted"),
+    grid: cssVar("--grid"), surface: cssVar("--surface"),
+    accent: cssVar("--accent"), series2: cssVar("--series-2"),
+    good: cssVar("--good"), serious: cssVar("--serious"), critical: cssVar("--critical"),
+    border: cssVar("--border")
+  };
+}
+function makeChart(id, config){
+  var el = $(id);
+  if(!el || typeof Chart === "undefined") return null;
+  if(charts[id]) charts[id].destroy();
+  charts[id] = new Chart(el.getContext("2d"), config);
+  return charts[id];
+}
+function fmtMonth(d){ return d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}); }
+
+function renderOverview(){
+  var o = computeOverview();
+  var T = chartTheme();
+
+  /* data-quality note */
+  var qn = $("ovQuality");
+  if(o.excluded){
+    qn.hidden = false;
+    qn.textContent = o.excluded + " legacy record" + (o.excluded>1?"s":"") +
+      " excluded from the figures below (a pre-2026 column shift in the sheet — see the Completed tab, oldest rows).";
+  } else qn.hidden = true;
+
+  /* KPI tiles */
+  var s = $("ovStats"); s.innerHTML = "";
+  s.appendChild(tile("hero","Total revenue (Live + Completed)", compact(o.revenue),
+    o.live.length + " live · " + o.comp.length + " completed contract" + (o.comp.length===1?"":"s")));
+  s.appendChild(tile("","Collected to date", compact(o.collected),
+    "Advance + confirmed payments"));
+  s.appendChild(tile("","Outstanding", compact(o.outstanding),
+    o.followUp.length ? o.followUp.length + " completed deal" + (o.followUp.length>1?"s":"") + " need follow-up" : "Live balances only"));
+  s.appendChild(tile("","Shipped volume", qty(o.shippedMT) + " MT",
+    "Across " + (o.live.length+o.comp.length) + " contracts"));
+  var claimPct = o.revenue ? (100*o.claimTotal/o.revenue) : 0;
+  s.appendChild(tile("","Claims", compact(o.claimTotal),
+    claimPct.toFixed(1) + "% of revenue · " + o.claimOpenN + " open"));
+
+  /* revenue trend — stacked bar, Completed + Live, by month */
+  makeChart("chTrend", {
+    type:"bar",
+    data:{
+      labels: o.months.map(function(m){ return fmtMonth(m.d); }),
+      datasets:[
+        { label:"Completed", data:o.months.map(function(m){ return Math.round(m.comp); }),
+          backgroundColor:T.accent, borderRadius:3, stack:"rev" },
+        { label:"Live", data:o.months.map(function(m){ return Math.round(m.live); }),
+          backgroundColor:T.series2, borderRadius:3, stack:"rev" }
+      ]
+    },
+    options:{
+      maintainAspectRatio:false,
+      scales:{
+        x:{ stacked:true, ticks:{color:T.muted,font:{size:11}}, grid:{display:false} },
+        y:{ stacked:true, ticks:{color:T.muted,font:{size:11},
+              callback:function(v){ return compact(v); } }, grid:{color:T.grid} }
+      },
+      plugins:{
+        legend:{ position:"top", align:"end", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
+          usePointStyle:true,pointStyle:"rectRounded",font:{size:12}} },
+        tooltip:{ callbacks:{ label:function(c){ return c.dataset.label+": "+money(c.parsed.y); } } }
+      }
+    }
+  });
+
+  /* buyer exposure — grouped horizontal bar, invoiced vs outstanding */
+  makeChart("chBuyers", {
+    type:"bar",
+    data:{
+      labels: o.byBuyer.map(function(b){ return b.k; }),
+      datasets:[
+        { label:"Invoiced", data:o.byBuyer.map(function(b){ return Math.round(b.inv); }),
+          backgroundColor:T.accent, borderRadius:3 },
+        { label:"Outstanding", data:o.byBuyer.map(function(b){ return Math.round(b.out); }),
+          backgroundColor:T.series2, borderRadius:3 }
+      ]
+    },
+    options:{
+      indexAxis:"y", maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{color:T.muted,font:{size:11}, callback:function(v){ return compact(v); }}, grid:{color:T.grid} },
+        y:{ ticks:{color:T.ink2,font:{size:11.5}}, grid:{display:false} }
+      },
+      plugins:{
+        legend:{ position:"top", align:"end", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
+          usePointStyle:true,pointStyle:"rectRounded",font:{size:12}} },
+        tooltip:{ callbacks:{ label:function(c){ return c.dataset.label+": "+money(c.parsed.x); } } }
+      }
+    }
+  });
+  var bCard = $("cardBuyers"); bCard.querySelector(".cv").style.height = Math.max(180, o.byBuyer.length*34+40) + "px";
+
+  /* top suppliers — single-series horizontal bar */
+  makeChart("chSuppliers", {
+    type:"bar",
+    data:{ labels:o.bySupplier.map(function(r){ return r.k; }),
+      datasets:[{ data:o.bySupplier.map(function(r){ return Math.round(r.v); }),
+        backgroundColor:T.accent, borderRadius:3 }] },
+    options:{
+      indexAxis:"y", maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{color:T.muted,font:{size:11}, callback:function(v){ return compact(v); }}, grid:{color:T.grid} },
+        y:{ ticks:{color:T.ink2,font:{size:11.5}}, grid:{display:false} }
+      },
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:function(c){ return money(c.parsed.x); } } } }
+    }
+  });
+  var sCard = $("cardSuppliers"); sCard.querySelector(".cv").style.height = Math.max(180, o.bySupplier.length*28+30) + "px";
+
+  var donutPalette = [T.accent, T.series2, cssVar("--good"), T.border];
+
+  /* material mix — donut, top 3 + Other */
+  makeChart("chMaterial", {
+    type:"doughnut",
+    data:{ labels:o.byMaterial.map(function(r){ return r.k; }),
+      datasets:[{ data:o.byMaterial.map(function(r){ return Math.round(r.v*100)/100; }),
+        backgroundColor:donutPalette, borderColor:T.surface, borderWidth:2 }] },
+    options:{
+      maintainAspectRatio:false, cutout:"62%",
+      plugins:{
+        legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
+          usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
+        tooltip:{ callbacks:{ label:function(c){ return c.label+": "+qty(c.parsed)+" MT"; } } }
+      }
+    }
+  });
+
+  /* origin mix — donut, top 3 + Other */
+  makeChart("chOrigin", {
+    type:"doughnut",
+    data:{ labels:o.byOrigin.map(function(r){ return r.k; }),
+      datasets:[{ data:o.byOrigin.map(function(r){ return Math.round(r.v); }),
+        backgroundColor:donutPalette, borderColor:T.surface, borderWidth:2 }] },
+    options:{
+      maintainAspectRatio:false, cutout:"62%",
+      plugins:{
+        legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
+          usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
+        tooltip:{ callbacks:{ label:function(c){ return c.label+": "+money(c.parsed); } } }
+      }
+    }
+  });
+
+  /* claims — donut, settled vs open, status colors (never color-alone: legend + tooltip label it) */
+  makeChart("chClaims", {
+    type:"doughnut",
+    data:{ labels:["Settled ("+o.claimSettledN+")","Open ("+o.claimOpenN+")"],
+      datasets:[{ data:[Math.round(o.claimSettledVal*100)/100, Math.round(o.claimOpenVal*100)/100],
+        backgroundColor:[T.good, T.serious], borderColor:T.surface, borderWidth:2 }] },
+    options:{
+      maintainAspectRatio:false, cutout:"62%",
+      plugins:{
+        legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
+          usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
+        tooltip:{ callbacks:{ label:function(c){ return c.label+": "+money(c.parsed,2); } } }
+      }
+    }
+  });
+
+  /* operational stat column */
+  var ops = $("ovOps"); ops.innerHTML = "";
+  function op(k,val,sub){
+    var d = el("div","op");
+    d.appendChild(el("div","k",k));
+    var v = el("div","v",val);
+    if(sub){ var sm=el("small",null,sub); v.appendChild(sm); }
+    d.appendChild(v);
+    ops.appendChild(d);
+  }
+  op("Avg. booking lead time", o.avgLeadTime!=null ? Math.round(o.avgLeadTime)+" days" : "—",
+     "Contract date → ETD");
+  op("Avg. transit time", o.avgTransit!=null ? Math.round(o.avgTransit)+" days" : "—",
+     "ETD → ETA");
+  op("Live shipments overdue", String(o.overdue),
+     "Arrived 14+ days ago, no final docs" + (o.liveCount ? " · of " + o.liveCount + " live" : ""));
+
+  /* needs-follow-up list */
+  var flCard = $("cardFollowup"), fl = $("ovFollowup");
+  fl.innerHTML = "";
+  if(o.followUp.length){
+    flCard.hidden = false;
+    o.followUp.sort(function(a,b){ return (b.sum.balanceValue||0)-(a.sum.balanceValue||0); })
+      .forEach(function(r){
+        var row = el("div","flrow");
+        var nm = el("div","flnm", v(r,"contractNo") || ("TS "+v(r,"tsNo")));
+        nm.appendChild(el("span","flsub", v(r,"supplier") + "  →  " + v(r,"buyer")));
+        row.appendChild(nm);
+        row.appendChild(el("div","flamt", money(r.sum.balanceValue,2) + " owed"));
+        row.onclick = function(){ openPanel(r, "shipment"); };
+        row.tabIndex = 0;
+        row.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openPanel(r,"shipment"); } };
+        fl.appendChild(row);
+      });
+  } else flCard.hidden = true;
+}
+
+/* ============================ tabs & filters ============================ */
+function renderTabs(){
+  var n = $("tabs"); n.innerHTML = "";
+  TABS.forEach(function(t){
+    var b = el("button","tab");
+    b.type = "button"; b.setAttribute("role","tab");
+    b.setAttribute("aria-selected", t.key === state.tab ? "true" : "false");
+    b.appendChild(document.createTextNode(t.label));
+    if(t.kind !== "overview")
+      b.appendChild(el("span","n", state.err[t.key] ? "!" : String(recs(t.key).length)));
+    b.onclick = function(){
+      if(state.tab === t.key) return;
+      state.tab = t.key; state.q = ""; $("q").value = "";
+      state.supplier = state.buyer = state.origin = "";
+      if(location.hash.replace(/^#/,"") !== t.key) location.hash = t.key;
+      renderAll();
+    };
+    n.appendChild(b);
+  });
+}
+
+function options(sel, vals, label){
+  var keep = sel.value;
+  sel.innerHTML = "";
+  sel.appendChild(new Option(label, ""));
+  vals.forEach(function(v){ sel.appendChild(new Option(v, v)); });
+  sel.value = vals.indexOf(keep) >= 0 ? keep : "";
+  sel.disabled = vals.length === 0;
+}
+function uniq(rows, k){
+  var seen = {}, out = [];
+  rows.forEach(function(r){ var x = v(r,k); if(x && !seen[x]){ seen[x]=1; out.push(x); } });
+  return out.sort();
+}
+function renderFilters(){
+  if(current().kind === "overview") return;
+  var rows = recs(state.tab), isClaim = current().kind === "claim";
+  $("fSupplier").hidden = isClaim;
+  $("fOrigin").hidden = isClaim;
+  options($("fSupplier"), isClaim ? [] : uniq(rows,"supplier"), "All suppliers");
+  options($("fBuyer"), uniq(rows,"buyer"), "All buyers");
+  options($("fOrigin"), isClaim ? [] : uniq(rows,"origin"), "All origins");
+  state.supplier = $("fSupplier").value; state.buyer = $("fBuyer").value;
+  state.origin = $("fOrigin").value;
+}
+
+function filtered(){
+  var q = state.q.trim().toLowerCase();
+  var rows = recs(state.tab).filter(function(r){
+    if(state.supplier && v(r,"supplier") !== state.supplier) return false;
+    if(state.buyer && v(r,"buyer") !== state.buyer) return false;
+    if(state.origin && v(r,"origin") !== state.origin) return false;
+    if(q && r.search.indexOf(q) === -1) return false;
+    return true;
+  });
+  var s = state.sort[state.tab];
+  if(s){
+    var cols = columns();
+    var col = cols.filter(function(c){ return c.k === s.k; })[0];
+    if(col){
+      rows = rows.slice().sort(function(a,b){
+        var x = col.val(a), y = col.val(b);
+        var ax = (x==null||x===""), ay = (y==null||y==="");
+        if(ax && ay) return 0; if(ax) return 1; if(ay) return -1;
+        var c = (typeof x === "number" && typeof y === "number")
+              ? x - y : String(x).localeCompare(String(y));
+        return s.dir === "desc" ? -c : c;
+      });
+    }
+  }
+  return rows;
+}
+
+/* ============================ table ============================ */
+function columns(){
+  if(current().kind === "claim"){
+    return [
+      { k:"buyer", t:"Buyer", sort:1, val:function(r){ return v(r,"buyer"); },
+        cell:function(r,td){ td.appendChild(el("div","strong", v(r,"buyer") || "—")); } },
+      { k:"contractNo", t:"Contract", sort:1, val:function(r){ return v(r,"contractNo"); },
+        cell:function(r,td){ td.textContent = v(r,"contractNo") || "—"; } },
+      { k:"material", t:"Material", val:function(r){ return v(r,"material"); },
+        cell:function(r,td){
+          var all = vAll(r,"material");
+          td.appendChild(el("div","clip", all[0] || "—"));
+          if(all.length > 1) td.appendChild(el("div","sub2", "+" + (all.length-1) + " more"));
+        } },
+      { k:"claimValue", t:"Claim (USD)", num:1, sort:1, val:function(r){ return r.sum.claimValue; },
+        cell:function(r,td){ td.textContent = r.sum.claimValue != null ? money(r.sum.claimValue,2) : "—"; } },
+      { k:"status", t:"Status", sort:1, val:function(r){ return v(r,"status"); },
+        cell:function(r,td){
+          var st = v(r,"status");
+          td.appendChild(chip(st || "Open", r.settled ? "good" : (st ? "warn" : "mute")));
+          if(r.statusExtra > 0)
+            td.appendChild(el("div","sub2", "+" + r.statusExtra + " other status on this contract"));
+        } }
+    ];
+  }
+  return [
+    { k:"tsNo", t:"TS", num:1, sort:1,
+      val:function(r){ var n = parseFloat(v(r,"tsNo")); return isNaN(n) ? null : n; },
+      cell:function(r,td){ td.textContent = v(r,"tsNo") || "—"; } },
+    { k:"contractNo", t:"Contract", sort:1, val:function(r){ return v(r,"contractNo"); },
+      cell:function(r,td){
+        td.appendChild(el("div","strong " + "clip w2", v(r,"contractNo") || "—"));
+        var d = v(r,"contractDate"); if(d) td.appendChild(el("div","sub2", d));
+      } },
+    { k:"supplier", t:"Supplier → Buyer", sort:1, val:function(r){ return v(r,"supplier"); },
+      cell:function(r,td){
+        td.appendChild(el("div","clip w2", v(r,"supplier") || "—"));
+        td.appendChild(el("div","sub2", "→ " + (v(r,"buyer") || "—")));
+      } },
+    { k:"material", t:"Material", sort:1, val:function(r){ return v(r,"material"); },
+      cell:function(r,td){
+        var all = vAll(r,"material");
+        td.appendChild(el("div","clip", all[0] || "—"));
+        var bits = [];
+        if(all.length > 1) bits.push("+" + (all.length-1) + " more");
+        if(r.lines) bits.push(r.lines + " extra lot" + (r.lines>1?"s":""));
+        if(bits.length) td.appendChild(el("div","sub2", bits.join(" · ")));
+      } },
+    { k:"route", t:"Route", val:function(r){ return v(r,"pol"); },
+      cell:function(r,td){
+        var pol = v(r,"pol") || v(r,"origin") || "—", pod = v(r,"pod") || "—";
+        td.appendChild(el("div","clip w2", pol + " → " + pod));
+        var fd = v(r,"finalDest"); if(fd) td.appendChild(el("div","sub2", fd));
+      } },
+    { k:"shippedQty", t:"Shipped MT", num:1, sort:1, val:function(r){ return r.sum.shippedQty; },
+      cell:function(r,td){
+        td.textContent = qty(r.sum.shippedQty);
+        var cq = r.sum.contractQty;
+        if(cq) td.appendChild(el("div","sub2", "of " + qty(cq)));
+      } },
+    { k:"invoiceValue", t:"Invoice", num:1, sort:1, val:function(r){ return r.sum.invoiceValue; },
+      cell:function(r,td){ td.textContent = r.sum.invoiceValue != null ? money(r.sum.invoiceValue) : "—"; } },
+    { k:"balanceValue", t:"Balance", num:1, sort:1, val:function(r){ return r.sum.balanceValue; },
+      cell:function(r,td){
+        var b = r.sum.balanceValue;
+        td.textContent = b != null ? money(b) : "—";
+        if(r.settledPay) td.style.color = "var(--good-ink)";
+      } },
+    { k:"eta", t:"ETD → ETA", sort:1,
+      val:function(r){ return r.etaDate ? r.etaDate.getTime() : null; },
+      cell:function(r,td){
+        td.appendChild(el("div", null, (v(r,"etd") || "—") + " → " + (v(r,"eta") || "—")));
+        var c = etaChip(r, today);
+        if(c){ var w = el("div","sub2"); w.appendChild(chip(c.t, c.c)); td.appendChild(w); }
+      } },
+    { k:"stage", t:"Status", sort:1, val:function(r){ return r.stage.t; },
+      cell:function(r,td){
+        var w = el("div","chips");
+        w.appendChild(chip(r.stage.t, r.stage.c));
+        w.appendChild(chip(r.pay.t, r.pay.c));
+        td.appendChild(w);
+      } }
+  ];
+}
+
+function chip(text, cls){
+  var c = el("span","chip " + (cls||"mute"));
+  c.appendChild(el("span","sq"));
+  c.appendChild(document.createTextNode(text));
+  return c;
+}
+
+function renderTable(){
+  if(current().kind === "overview") return;
+  var cols = columns(), rows = filtered(), tb = $("tbody"), th = $("thead");
+  th.innerHTML = ""; tb.innerHTML = "";
+
+  var tr = el("tr");
+  var s = state.sort[state.tab];
+  cols.forEach(function(c){
+    var h = el("th", (c.num?"num ":"") + (c.sort?"s":""));
+    h.appendChild(document.createTextNode(c.t));
+    if(c.sort){
+      h.appendChild(el("span","ar", s && s.k===c.k ? (s.dir==="desc"?" ▼":" ▲") : " ↕"));
+      h.onclick = function(){
+        var cur = state.sort[state.tab];
+        state.sort[state.tab] = (cur && cur.k===c.k && cur.dir==="asc")
+          ? {k:c.k, dir:"desc"} : {k:c.k, dir:"asc"};
+        renderTable();
+      };
+      h.setAttribute("aria-sort", s && s.k===c.k ? (s.dir==="desc"?"descending":"ascending") : "none");
+    }
+    if(c.num) h.style.textAlign = "right";
+    tr.appendChild(h);
+  });
+  th.appendChild(tr);
+
+  var err = state.err[state.tab];
+  $("count").textContent = err ? "" :
+    rows.length + " of " + recs(state.tab).length + " shown";
+
+  if(err || !rows.length){
+    var wrap = el("tr"), td = el("td");
+    td.colSpan = cols.length;
+    td.className = "empty" + (err ? " err" : "");
+    td.textContent = err ? ("Could not load this tab — " + err)
+      : (recs(state.tab).length ? "Nothing matches these filters."
+                                : "This tab is empty.");
+    wrap.appendChild(td); wrap.style.cursor = "default";
+    tb.appendChild(wrap);
+    return;
+  }
+
+  rows.forEach(function(r){
+    var row = el("tr");
+    row.tabIndex = 0;
+    cols.forEach(function(c){
+      var td = el("td", c.num ? "num" : null);
+      td.setAttribute("data-l", c.t);
+      c.cell(r, td);
+      row.appendChild(td);
+    });
+    row.onclick = function(){ openPanel(r); };
+    row.onkeydown = function(e){
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openPanel(r); } };
+    tb.appendChild(row);
+  });
+}
+
+/* ============================ detail panel ============================ */
+var lastFocus = null;
+function openPanel(rec, kind){
+  lastFocus = document.activeElement;
+  var isClaim = (kind || current().kind) === "claim";
+  var defs = isClaim ? CLAIM_FIELDS : SHIPMENT_FIELDS;
+
+  $("pTitle").textContent = isClaim
+    ? (v(rec,"contractNo") || v(rec,"buyer") || "Claim")
+    : (v(rec,"contractNo") || ("TS " + (v(rec,"tsNo") || "—")));
+  $("pSub").textContent = isClaim
+    ? v(rec,"buyer")
+    : [v(rec,"supplier"), v(rec,"buyer")].filter(Boolean).join("  →  ")
+      + (rec.lines ? "   ·   " + (rec.lines+1) + " lot lines" : "");
+
+  var body = $("pBody");
+  body.innerHTML = "";
+
+  if(!isClaim){
+    var head = el("div","chips");
+    head.style.margin = "14px 0 2px";
+    head.appendChild(chip(rec.stage.t, rec.stage.c));
+    head.appendChild(chip(rec.pay.t, rec.pay.c));
+    var e = etaChip(rec, today); if(e) head.appendChild(chip(e.t, e.c));
+    body.appendChild(head);
+  }
+
+  GROUPS.concat(["Claim"]).forEach(function(g){
+    var fields = defs.filter(function(d){ return d.g === g; });
+    if(!fields.length) return;
+    var rowsOut = [];
+    fields.forEach(function(d){
+      var all = vAll(rec, d.k);
+      var isSummed = d.n && rec.lines && rec.sum[d.k] != null && all.length > 1;
+      if(!all.length && rec.sum[d.k] == null) return;
+      rowsOut.push({ d:d, all:all, summed:isSummed });
+    });
+    if(!rowsOut.length) return;
+
+    var sec = el("div","sec");
+    sec.appendChild(el("h3", null, g));
+    if(g === "Remarks"){
+      rowsOut.forEach(function(o){
+        o.all.forEach(function(t){ sec.appendChild(el("div","note", t)); });
+      });
+    } else {
+      var dl = el("dl","kv");
+      rowsOut.forEach(function(o){
+        dl.appendChild(el("dt", null, o.d.lbl));
+        var dd = el("dd", o.d.n ? "money" : null);
+        var isMoney = /USD/.test(o.d.lbl);
+        if(o.summed){
+          dd.textContent = (isMoney ? money(rec.sum[o.d.k],2) : qty(rec.sum[o.d.k])) + "  (total)";
+          o.all.forEach(function(t){ dd.appendChild(el("span","more", "· " + t)); });
+        } else if(o.all.length){
+          dd.appendChild(document.createTextNode(o.all[0]));
+          o.all.slice(1).forEach(function(t){ dd.appendChild(el("span","more", "· " + t)); });
+        } else {
+          dd.textContent = isMoney ? money(rec.sum[o.d.k],2) : qty(rec.sum[o.d.k]);
+        }
+        dl.appendChild(dd);
+      });
+      sec.appendChild(dl);
+    }
+    body.appendChild(sec);
+  });
+
+  var src = el("div","sec");
+  var a = el("a","btn");
+  a.href = SHEET_URL; a.target = "_blank"; a.rel = "noopener";
+  a.textContent = "Edit in Google Sheets ↗";
+  src.appendChild(a);
+  body.appendChild(src);
+
+  $("ov").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("close").focus();
+}
+function closePanel(){
+  $("ov").hidden = true;
+  document.body.style.overflow = "";
+  if(lastFocus && lastFocus.focus) lastFocus.focus();
+}
+
+/* ============================ CSV ============================ */
+function exportCsv(){
+  var isClaim = current().kind === "claim";
+  var defs = isClaim ? CLAIM_FIELDS : SHIPMENT_FIELDS;
+  var rows = filtered();
+  var head = defs.map(function(d){ return d.lbl; });
+  var out = [head];
+  rows.forEach(function(r){
+    out.push(defs.map(function(d){
+      var all = vAll(r, d.k);
+      if(all.length) return all.join(" | ");
+      return r.sum[d.k] != null ? String(r.sum[d.k]) : "";
+    }));
+  });
+  var csv = out.map(function(line){
+    return line.map(function(c){
+      c = String(c==null?"":c);
+      return /[",\n]/.test(c) ? '"' + c.replace(/"/g,'""') + '"' : c;
+    }).join(",");
+  }).join("\r\n");
+
+  var blob = new Blob(["﻿" + csv], {type:"text/csv;charset=utf-8"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "rinox-" + state.tab + "-" +
+    new Date().toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+/* ============================ wiring ============================ */
+function renderAll(){
+  var isOverview = current().kind === "overview";
+  $("overviewWrap").hidden = !isOverview;
+  $("toolsWrap").hidden = isOverview;
+  $("tableWrapEl").hidden = isOverview;
+  renderTabs();
+  if(isOverview) renderOverview();
+  else { renderFilters(); renderTable(); }
+}
+
+$("sheetLink").href = SHEET_URL;
+$("refresh").onclick = function(){ load(); };
+$("clear").onclick = function(){
+  state.q = ""; $("q").value = "";
+  $("fSupplier").value = $("fBuyer").value = $("fOrigin").value = "";
+  state.supplier = state.buyer = state.origin = "";
+  state.sort[state.tab] = null;
+  renderTable();
+};
+$("q").oninput = function(){ state.q = this.value; renderTable(); };
+["fSupplier","fBuyer","fOrigin"].forEach(function(id){
+  $(id).onchange = function(){
+    state.supplier = $("fSupplier").value;
+    state.buyer = $("fBuyer").value;
+    state.origin = $("fOrigin").value;
+    renderTable();
+  };
+});
+$("close").onclick = closePanel;
+$("ov").onclick = function(e){ if(e.target === this) closePanel(); };
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape" && !$("ov").hidden) closePanel();
+  if(e.key === "/" && document.activeElement !== $("q") && $("ov").hidden){
+    e.preventDefault(); $("q").focus();
+  }
+});
+$("csv").onclick = exportCsv;
+window.addEventListener("hashchange", function(){
+  var t = tabFromHash();
+  if(t !== state.tab){ state.tab = t; renderAll(); }
+});
+if(window.matchMedia){
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(){
+    if(current().kind === "overview") renderOverview();
+  });
+}
+
+load();
+setInterval(load, AUTO_REFRESH_MS);
+
+})();
+</script>
+</body>
+</html>
