@@ -72,9 +72,10 @@ body{
 /* ---------- top bar ---------- */
 .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   margin-bottom:23px;padding-bottom:19px;position:relative}
-.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
-  background:linear-gradient(90deg,var(--brand) 0%,var(--brand) 7%,var(--grid) 7%);
-  border-radius:2px}
+.topbar{position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--grid);
+  border-radius:2px;overflow:hidden}
+.topbar .fill{position:absolute;left:0;top:0;bottom:0;width:0%;opacity:1;
+  background:linear-gradient(90deg,var(--brand),var(--brand-2));border-radius:2px}
 .mark{width:38px;height:38px;border-radius:11px;color:#fff;
   background:linear-gradient(155deg,var(--brand) 0%,var(--brand-2) 100%);
   box-shadow:0 1px 1px rgba(0,0,0,.08), 0 6px 14px -6px var(--brand-soft), var(--inset-hi);
@@ -150,12 +151,17 @@ body{
 .flcard{padding:16px 18px}
 .flcard h2{margin:0 0 2px;font-size:14px;font-weight:620}
 .flcard .cap{margin:0 0 12px;font-size:12px;color:var(--muted)}
+.chhead,.flhead{display:flex;justify-content:space-between;align-items:flex-start;
+  gap:12px;flex-wrap:wrap}
+.flhead .x{margin-left:0;flex:none}
+#trendPeriod{min-width:118px;flex:none}
 .flrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--grid);
   cursor:pointer}
 .flrow:first-child{border-top:0}
 .flrow:hover .flnm{color:var(--accent)}
 .flrow .flnm{font-weight:600;font-size:13px;flex:1 1 auto;min-width:0}
 .flrow .flsub{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:1px}
+.flrow .flamt.neutral{color:var(--ink)}
 .flrow .flamt{font-variant-numeric:tabular-nums;font-size:13px;color:var(--critical-ink);
   font-weight:600;white-space:nowrap}
 @media (max-width:1100px){
@@ -284,6 +290,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <div class="wrap">
 
   <header class="top">
+    <div class="topbar" aria-hidden="true"><div class="fill" id="topbarFill"></div></div>
     <div class="mark">R</div>
     <div class="brand">
       <h1>Rinox<span class="in">India</span></h1>
@@ -305,38 +312,47 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <div class="ovgrid">
       <section class="card chart span2" id="cardTrend">
-        <h2>Revenue by month</h2>
-        <p class="cap">Invoiced value, Live + Completed, USD</p>
+        <div class="chhead">
+          <div>
+            <h2>Revenue</h2>
+            <p class="cap">Invoiced value, Live + Completed, USD — click a bar for details</p>
+          </div>
+          <select id="trendPeriod" aria-label="Group revenue by">
+            <option value="month">Monthly</option>
+            <option value="quarter">Quarterly</option>
+            <option value="year">Yearly</option>
+          </select>
+        </div>
         <div class="cv h-trend"><canvas id="chTrend"></canvas></div>
       </section>
 
       <section class="card chart" id="cardClaims">
         <h2>Claims</h2>
-        <p class="cap">Settled vs open, by claim value</p>
+        <p class="cap">Settled vs open, by claim value — click a slice for details</p>
         <div class="cv h-donut"><canvas id="chClaims"></canvas></div>
       </section>
 
       <section class="card chart span2" id="cardBuyers">
         <h2>Buyer exposure</h2>
-        <p class="cap">Top buyers — invoiced vs still outstanding, USD</p>
+        <p class="cap">Top buyers — invoiced vs still outstanding, USD — click a bar for details</p>
         <div class="cv h-bar"><canvas id="chBuyers"></canvas></div>
       </section>
 
       <section class="card chart" id="cardSuppliers">
         <h2>Top suppliers</h2>
-        <p class="cap">By invoiced value, USD</p>
+        <p class="cap">By invoiced value, USD — click a bar for details</p>
         <div class="cv h-bar"><canvas id="chSuppliers"></canvas></div>
       </section>
 
       <section class="card chart" id="cardMaterial">
         <h2>Material mix</h2>
-        <p class="cap">By shipped quantity, MT</p>
+        <p class="cap">By shipped quantity, MT — click a slice for details</p>
         <div class="cv h-donut"><canvas id="chMaterial"></canvas></div>
       </section>
 
       <section class="card chart" id="cardOrigin">
         <h2>Origin mix</h2>
-        <p class="cap">By invoiced value, USD</p>
+        <p class="cap">By invoiced value, USD — click a slice for details</p>
         <div class="cv h-donut"><canvas id="chOrigin"></canvas></div>
       </section>
 
@@ -346,6 +362,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="oplist" id="ovOps"></div>
       </section>
     </div>
+
+    <section class="card flcard" id="cardDrill" hidden>
+      <div class="flhead">
+        <div>
+          <h2 id="drillTitle"></h2>
+          <p class="cap" id="drillCap"></p>
+        </div>
+        <button class="x" id="drillClose" aria-label="Close">×</button>
+      </div>
+      <div id="drillList"></div>
+    </section>
 
     <section class="card flcard" id="cardFollowup" hidden>
       <h2>Needs follow-up</h2>
@@ -708,16 +735,55 @@ function tabFromHash(){
   var h = (location.hash || "").replace(/^#/,"").toLowerCase();
   return TABS.some(function(t){ return t.key === h; }) ? h : "overview";
 }
-var state = { tab:tabFromHash(), data:{}, err:{}, sort:{}, q:"", supplier:"", buyer:"", origin:"", synced:null };
+var state = { tab:tabFromHash(), data:{}, err:{}, sort:{}, q:"", supplier:"", buyer:"", origin:"",
+  synced:null, trendPeriod:"month" };
 var today = new Date(); today.setHours(0,0,0,0);
 
 function current(){ return TABS.filter(function(t){ return t.key===state.tab; })[0]; }
 function recs(key){ return state.data[key] || []; }
 
 /* ============================ loading ============================ */
+/* Sync progress bar — same track YouTube/GitHub use: trailing increments
+   that creep toward ~90% while the fetch is in flight (true progress of
+   three parallel JSONP loads isn't observable), then snap to 100% and
+   fade out the instant load() actually settles. */
+var topbarTimer = null;
+function topbarStart(){
+  var fill = $("topbarFill");
+  clearInterval(topbarTimer);
+  fill.style.transition = "none";
+  fill.style.opacity = "1";
+  fill.style.width = "0%";
+  void fill.offsetWidth;
+  fill.style.transition = "width .4s ease";
+  var pct = 0;
+  topbarTimer = setInterval(function(){
+    pct += (90 - pct) * 0.12 + 0.5;
+    if(pct > 90) pct = 90;
+    fill.style.width = pct + "%";
+  }, 220);
+}
+function topbarDone(){
+  clearInterval(topbarTimer);
+  var fill = $("topbarFill");
+  fill.style.transition = "width .25s ease";
+  fill.style.width = "100%";
+  setTimeout(function(){
+    fill.style.transition = "opacity .35s ease";
+    fill.style.opacity = "0";
+    setTimeout(function(){
+      fill.style.transition = "none";
+      fill.style.width = "0%";
+      void fill.offsetWidth;
+      fill.style.opacity = "1";
+    }, 380);
+  }, 220);
+}
+
 function load(){
   $("dot").className = "dot busy";
   $("syncTxt").textContent = "Syncing…";
+  topbarStart();
   var jobs = TABS.filter(function(t){ return t.sheet; }).map(function(t){
     return fetchSheet(t.sheet).then(function(table){
       state.data[t.key] = parseRecords(table, t.kind==="claim"?CLAIM_FIELDS:SHIPMENT_FIELDS, t.kind);
@@ -741,6 +807,7 @@ function load(){
     }
     $("footSync").textContent = state.synced ? "Last read from the sheet at " +
       state.synced.toLocaleString("en-GB") : "";
+    topbarDone();
     renderAll();
   });
 }
@@ -805,45 +872,68 @@ function computeOverview(){
   var claimSettledVal = claimSettled.reduce(function(a,c){ return a + (c.sum.claimValue||0); }, 0);
   var claimOpenVal = claimTotal - claimSettledVal;
 
-  /* monthly revenue, split live vs completed */
+  /* revenue over time, split live vs completed — bucketed by month/quarter/year
+     per the period toggle, each bucket keeping its underlying records so a
+     chart click can show exactly what it's made of. */
+  var period = state.trendPeriod || "month";
+  function bucketKey(d){
+    if(period === "year") return String(d.getFullYear());
+    if(period === "quarter") return d.getFullYear() + "-Q" + (Math.floor(d.getMonth()/3)+1);
+    return d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2);
+  }
+  function bucketLabel(bucket){
+    if(period === "year") return bucket.key;
+    if(period === "quarter"){ var m = bucket.key.match(/^(\d{4})-Q(\d)$/); return "Q"+m[2]+" "+m[1].slice(2); }
+    return fmtMonth(bucket.d);
+  }
   var monthMap = {};
   all.forEach(function(r){
     var d = parseDate(v(r,"contractDate"));
     if(!d) return;
-    var key = d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2);
-    if(!monthMap[key]) monthMap[key] = { d:new Date(d.getFullYear(),d.getMonth(),1), live:0, comp:0 };
+    var key = bucketKey(d);
+    if(!monthMap[key]) monthMap[key] = { key:key, d:d, live:0, comp:0, liveRecs:[], compRecs:[] };
     var isLive = live.indexOf(r) !== -1;
     monthMap[key][isLive?"live":"comp"] += (r.sum.invoiceValue||0);
+    monthMap[key][isLive?"liveRecs":"compRecs"].push(r);
   });
   var months = Object.keys(monthMap).sort().map(function(k){ return monthMap[k]; });
+  months.forEach(function(m){ m.label = bucketLabel(m); });
 
+  /* top-N by value, each bucket (incl. the folded "Other") keeping its records */
   function topN(map, n){
-    var rows = Object.keys(map).map(function(k){ return {k:k, v:map[k]}; })
+    var rows = Object.keys(map).map(function(k){ return {k:k, v:map[k].v, recs:map[k].recs}; })
                      .sort(function(a,b){ return b.v - a.v; });
     var top = rows.slice(0,n), rest = rows.slice(n);
-    var other = rest.reduce(function(a,r){ return a+r.v; }, 0);
-    if(other > 0) top.push({k:"Other", v:other});
+    if(rest.length){
+      var otherV = rest.reduce(function(a,r){ return a+r.v; }, 0);
+      var otherRecs = rest.reduce(function(a,r){ return a.concat(r.recs); }, []);
+      if(otherV > 0) top.push({k:"Other", v:otherV, recs:otherRecs});
+    }
     return top;
+  }
+  function bump(map, k, amt, rec){
+    if(!map[k]) map[k] = {v:0, recs:[]};
+    map[k].v += amt; map[k].recs.push(rec);
   }
 
   var bySupplier = {};
-  all.forEach(function(r){ var k=v(r,"supplier")||"(blank)"; bySupplier[k]=(bySupplier[k]||0)+(r.sum.invoiceValue||0); });
+  all.forEach(function(r){ bump(bySupplier, v(r,"supplier")||"(blank)", r.sum.invoiceValue||0, r); });
 
-  var byBuyerInv = {}, byBuyerOut = {}, byBuyerRef = {};
+  var byBuyerInv = {}, byBuyerOut = {}, byBuyerRecs = {};
   all.forEach(function(r){
     var k = v(r,"buyer") || "(blank)";
     byBuyerInv[k] = (byBuyerInv[k]||0) + (r.sum.invoiceValue||0);
     var out = live.indexOf(r)!==-1 ? Math.max(r.sum.balanceValue||0,0)
             : (followUpSet[r.row] ? (r.sum.balanceValue||0) : 0);
     byBuyerOut[k] = (byBuyerOut[k]||0) + out;
-    byBuyerRef[k] = r;
+    (byBuyerRecs[k] = byBuyerRecs[k] || []).push(r);
   });
 
   var byMaterial = {};
-  all.forEach(function(r){ var k=v(r,"material")||"(blank)"; byMaterial[k]=(byMaterial[k]||0)+(r.sum.shippedQty||0); });
+  all.forEach(function(r){ bump(byMaterial, v(r,"material")||"(blank)", r.sum.shippedQty||0, r); });
 
   var byOrigin = {};
-  all.forEach(function(r){ var k=(v(r,"origin")||"(blank)").toUpperCase(); byOrigin[k]=(byOrigin[k]||0)+(r.sum.invoiceValue||0); });
+  all.forEach(function(r){ bump(byOrigin, (v(r,"origin")||"(blank)").toUpperCase(), r.sum.invoiceValue||0, r); });
 
   /* operational: shipping transit (ETD->ETA), booking lead time (contract->ETD),
      live shipments flagged overdue without final docs.
@@ -861,15 +951,18 @@ function computeOverview(){
   var avg = function(a){ return a.length ? a.reduce(function(x,y){return x+y;},0)/a.length : null; };
   var overdue = liveAll.filter(function(r){ var c = etaChip(r, today); return c && c.c==="critical"; }).length;
 
+  var claimOpen = claims.filter(function(c){ return !c.settled; });
+
   return {
     live:live, comp:comp, excluded:excluded, followUp:followUp,
     revenue:revenue, collected:collectedLive+collectedComp, outstanding:outstandingLive+outstandingComp,
     shippedMT:shippedMT, claimTotal:claimTotal, claimSettledVal:claimSettledVal, claimOpenVal:claimOpenVal,
-    claimSettledN:claimSettled.length, claimOpenN:claims.length-claimSettled.length,
-    months:months, bySupplier:topN(bySupplier,8), byBuyer:Object.keys(byBuyerInv).map(function(k){
-        return {k:k, inv:byBuyerInv[k], out:byBuyerOut[k]||0};
+    claimSettled:claimSettled, claimOpen:claimOpen,
+    claimSettledN:claimSettled.length, claimOpenN:claimOpen.length,
+    period:period, months:months, bySupplier:topN(bySupplier,8),
+    byBuyer:Object.keys(byBuyerInv).map(function(k){
+        return {k:k, inv:byBuyerInv[k], out:byBuyerOut[k]||0, recs:byBuyerRecs[k]};
       }).sort(function(a,b){ return b.inv-a.inv; }).slice(0,8),
-    byBuyerRef:byBuyerRef,
     byMaterial:topN(byMaterial,3), byOrigin:topN(byOrigin,3),
     avgTransit:avg(transit), avgLeadTime:avg(leadTime), overdue:overdue, liveCount:liveAll.length
   };
@@ -896,9 +989,16 @@ function makeChart(id, config){
 }
 function fmtMonth(d){ return d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}); }
 
+function pointerHover(evt, elements){
+  evt.native.target.style.cursor = elements.length ? "pointer" : "default";
+}
+
 function renderOverview(){
   var o = computeOverview();
   var T = chartTheme();
+
+  $("cardDrill").hidden = true;
+  $("trendPeriod").value = o.period;
 
   /* data-quality note */
   var qn = $("ovQuality");
@@ -922,11 +1022,11 @@ function renderOverview(){
   s.appendChild(tile("","Claims", compact(o.claimTotal),
     claimPct.toFixed(1) + "% of revenue · " + o.claimOpenN + " open"));
 
-  /* revenue trend — stacked bar, Completed + Live, by month */
+  /* revenue trend — stacked bar, Completed + Live, by month/quarter/year */
   makeChart("chTrend", {
     type:"bar",
     data:{
-      labels: o.months.map(function(m){ return fmtMonth(m.d); }),
+      labels: o.months.map(function(m){ return m.label; }),
       datasets:[
         { label:"Completed", data:o.months.map(function(m){ return Math.round(m.comp); }),
           backgroundColor:T.accent, borderRadius:3, stack:"rev" },
@@ -936,6 +1036,15 @@ function renderOverview(){
     },
     options:{
       maintainAspectRatio:false,
+      onHover:pointerHover,
+      onClick:function(evt, elements){
+        if(!elements.length) return;
+        var b = o.months[elements[0].index];
+        var isComp = elements[0].datasetIndex === 0;
+        var recs = isComp ? b.compRecs : b.liveRecs;
+        showDrill((isComp?"Completed":"Live")+" — "+b.label,
+          recs.length+" contract"+(recs.length===1?"":"s")+" · "+money(isComp?b.comp:b.live), recs, "shipment");
+      },
       scales:{
         x:{ stacked:true, ticks:{color:T.muted,font:{size:11}}, grid:{display:false} },
         y:{ stacked:true, ticks:{color:T.muted,font:{size:11},
@@ -963,6 +1072,13 @@ function renderOverview(){
     },
     options:{
       indexAxis:"y", maintainAspectRatio:false,
+      onHover:pointerHover,
+      onClick:function(evt, elements){
+        if(!elements.length) return;
+        var b = o.byBuyer[elements[0].index];
+        showDrill(b.k, b.recs.length+" contract"+(b.recs.length===1?"":"s")+
+          " · "+money(b.inv)+" invoiced", b.recs, "shipment");
+      },
       scales:{
         x:{ ticks:{color:T.muted,font:{size:11}, callback:function(v){ return compact(v); }}, grid:{color:T.grid} },
         y:{ ticks:{color:T.ink2,font:{size:11.5}}, grid:{display:false} }
@@ -984,6 +1100,13 @@ function renderOverview(){
         backgroundColor:T.accent, borderRadius:3 }] },
     options:{
       indexAxis:"y", maintainAspectRatio:false,
+      onHover:pointerHover,
+      onClick:function(evt, elements){
+        if(!elements.length) return;
+        var r = o.bySupplier[elements[0].index];
+        showDrill(r.k, r.recs.length+" contract"+(r.recs.length===1?"":"s")+
+          " · "+money(r.v)+" invoiced", r.recs, "shipment");
+      },
       scales:{
         x:{ ticks:{color:T.muted,font:{size:11}, callback:function(v){ return compact(v); }}, grid:{color:T.grid} },
         y:{ ticks:{color:T.ink2,font:{size:11.5}}, grid:{display:false} }
@@ -1004,6 +1127,13 @@ function renderOverview(){
         backgroundColor:donutPalette, borderColor:T.surface, borderWidth:2 }] },
     options:{
       maintainAspectRatio:false, cutout:"62%",
+      onHover:pointerHover,
+      onClick:function(evt, elements){
+        if(!elements.length) return;
+        var r = o.byMaterial[elements[0].index];
+        showDrill(r.k, r.recs.length+" contract"+(r.recs.length===1?"":"s")+
+          " · "+qty(r.v)+" MT", r.recs, "shipment");
+      },
       plugins:{
         legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
           usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
@@ -1020,6 +1150,13 @@ function renderOverview(){
         backgroundColor:donutPalette, borderColor:T.surface, borderWidth:2 }] },
     options:{
       maintainAspectRatio:false, cutout:"62%",
+      onHover:pointerHover,
+      onClick:function(evt, elements){
+        if(!elements.length) return;
+        var r = o.byOrigin[elements[0].index];
+        showDrill(r.k, r.recs.length+" contract"+(r.recs.length===1?"":"s")+
+          " · "+money(r.v)+" invoiced", r.recs, "shipment");
+      },
       plugins:{
         legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
           usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
@@ -1036,6 +1173,15 @@ function renderOverview(){
         backgroundColor:[T.good, T.serious], borderColor:T.surface, borderWidth:2 }] },
     options:{
       maintainAspectRatio:false, cutout:"62%",
+      onHover:pointerHover,
+      onClick:function(evt, elements){
+        if(!elements.length) return;
+        var isSettled = elements[0].index === 0;
+        var recs = isSettled ? o.claimSettled : o.claimOpen;
+        showDrill(isSettled ? "Settled claims" : "Open claims",
+          recs.length+" claim"+(recs.length===1?"":"s")+
+          " · "+money(isSettled?o.claimSettledVal:o.claimOpenVal,2), recs, "claim");
+      },
       plugins:{
         legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
           usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
@@ -1079,6 +1225,39 @@ function renderOverview(){
         fl.appendChild(row);
       });
   } else flCard.hidden = true;
+}
+
+/* click-through from any chart — one row per underlying record, same
+   open-the-full-panel interaction as the follow-up list above */
+function drillRow(rec, kind){
+  var row = el("div","flrow");
+  if(kind === "claim"){
+    var nm = el("div","flnm", v(rec,"buyer") || v(rec,"contractNo") || "Claim");
+    nm.appendChild(el("span","flsub", (v(rec,"contractNo")||"—") + "  ·  " + (v(rec,"material")||"—")));
+    row.appendChild(nm);
+    row.appendChild(el("div","flamt neutral",
+      rec.sum.claimValue!=null ? money(rec.sum.claimValue,2) : "—"));
+  } else {
+    var nm2 = el("div","flnm", v(rec,"contractNo") || ("TS "+v(rec,"tsNo")));
+    nm2.appendChild(el("span","flsub", (v(rec,"supplier")||"—") + "  →  " + (v(rec,"buyer")||"—")));
+    row.appendChild(nm2);
+    row.appendChild(el("div","flamt neutral",
+      rec.sum.invoiceValue!=null ? money(rec.sum.invoiceValue) : "—"));
+  }
+  row.onclick = function(){ openPanel(rec, kind); };
+  row.tabIndex = 0;
+  row.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openPanel(rec, kind); } };
+  return row;
+}
+function showDrill(title, cap, records, kind){
+  $("drillTitle").textContent = title;
+  $("drillCap").textContent = cap;
+  var list = $("drillList"); list.innerHTML = "";
+  if(!records.length) list.appendChild(el("div","empty", "No matching records."));
+  else records.forEach(function(r){ list.appendChild(drillRow(r, kind)); });
+  var card = $("cardDrill");
+  card.hidden = false;
+  card.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
 
 /* ============================ tabs & filters ============================ */
@@ -1450,8 +1629,11 @@ $("q").oninput = function(){ state.q = this.value; renderTable(); };
 });
 $("close").onclick = closePanel;
 $("ov").onclick = function(e){ if(e.target === this) closePanel(); };
+$("drillClose").onclick = function(){ $("cardDrill").hidden = true; };
+$("trendPeriod").onchange = function(){ state.trendPeriod = this.value; renderOverview(); };
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape" && !$("ov").hidden) closePanel();
+  if(e.key === "Escape" && $("ov").hidden && !$("cardDrill").hidden) $("cardDrill").hidden = true;
   if(e.key === "/" && document.activeElement !== $("q") && $("ov").hidden){
     e.preventDefault(); $("q").focus();
   }
