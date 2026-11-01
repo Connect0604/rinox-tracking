@@ -83,6 +83,9 @@ body{
 .btn.primary{background:var(--accent);border-color:transparent;color:#fff}
 .btn.primary:hover{filter:brightness(1.07)}
 .sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.fx{font-size:12px;color:var(--muted);white-space:nowrap;padding-right:2px;
+  border-right:1px solid var(--grid)}
+.fx b{color:var(--ink-2);font-weight:600;font-variant-numeric:tabular-nums}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none}
 .dot.busy{background:var(--warn);animation:pulse 1s ease-in-out infinite}
 .dot.bad{background:var(--critical)}
@@ -266,6 +269,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <p>Connecting Markets, Creating Value. · Shipment &amp; payment tracker</p>
     </div>
     <div class="sp"></div>
+    <div class="fx" id="fxBadge" hidden></div>
     <div class="sync"><span class="dot busy" id="dot"></span><span id="syncTxt">Loading…</span></div>
     <button class="btn" id="refresh">Refresh</button>
     <a class="btn" id="sheetLink" target="_blank" rel="noopener">Open sheet ↗</a>
@@ -527,6 +531,42 @@ function fetchSheet(name){
           + "&headers=1&tq=&_=" + Date.now();
     document.head.appendChild(s);
   });
+}
+
+/* ============================ FX reference rate ============================
+   A daily reference rate for the header, not live tick data — right for a
+   business dashboard. Cached in localStorage so the 5-minute auto-refresh
+   loop doesn't hit the API every cycle; refetched once the cached day has
+   passed. Labeled with the rate's own "as of" date (from the API), not
+   forced to match the viewer's calendar date — those can differ (e.g. a
+   weekend's rate is really Friday's), and mislabeling it would be the same
+   kind of staleness-as-current problem avoided elsewhere in this app. */
+var FX_CACHE_KEY = "rinox_fx_v1";
+function fetchFx(){
+  var badge = $("fxBadge");
+  try{
+    var cached = JSON.parse(localStorage.getItem(FX_CACHE_KEY) || "null");
+    var today = new Date().toDateString();
+    if(cached && cached.fetchedOn === today){ showFx(cached.rate, cached.asOf); return; }
+  }catch(e){ /* ignore a corrupt cache entry */ }
+
+  fetch("https://open.er-api.com/v6/latest/USD")
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.result !== "success" || !d.rates || !d.rates.INR) throw new Error("bad response");
+      var asOf = fmtDate(new Date(d.time_last_update_utc));
+      showFx(d.rates.INR, asOf);
+      try{ localStorage.setItem(FX_CACHE_KEY, JSON.stringify(
+        { rate:d.rates.INR, asOf:asOf, fetchedOn:new Date().toDateString() })); }catch(e){}
+    })
+    .catch(function(){ badge.hidden = true; });
+}
+function showFx(rate, asOf){
+  var badge = $("fxBadge");
+  badge.innerHTML = "";
+  badge.appendChild(document.createTextNode(asOf + " · $1 = "));
+  badge.appendChild(el("b", null, "₹" + rate.toLocaleString("en-IN",{maximumFractionDigits:2})));
+  badge.hidden = false;
 }
 
 /* ============================ parsing ============================ */
@@ -1408,6 +1448,7 @@ if(window.matchMedia){
 
 load();
 setInterval(load, AUTO_REFRESH_MS);
+fetchFx();
 
 /* PWA shell — registered last and best-effort: a failure here (e.g. running
    from file://, where service workers are unsupported) never blocks the app. */
