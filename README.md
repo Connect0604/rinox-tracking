@@ -52,7 +52,7 @@ The Overview has a **Cancelled** summary tile in the top row (count, share of
 all contracts, contracted MT — click it to list them) and a **Cancellations**
 donut under the Claims donut showing contract outcomes (Completed / Live /
 Cancelled); click a slice to list those contracts. If a cancelled contract
-already received an advance, a "refund or adjust" list appears at the bottom.
+an advance value recorded, a "confirm and refund or adjust" list appears at the bottom.
 When the tab can't be read, or is empty, a note above the charts says why.
 
 If a contract appears on CANCELLED *and* still on LIVE or COMPLETED (copied

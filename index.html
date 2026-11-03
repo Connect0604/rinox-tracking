@@ -380,8 +380,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <p class="qnote" id="ovCxNote" hidden></p>
     <section class="card flcard" id="cardCxAdv" hidden>
-      <h2>Cancelled — advance received</h2>
-      <p class="cap">Money already paid on contracts that were later cancelled — refund or adjust</p>
+      <h2>Cancelled — advance recorded</h2>
+      <p class="cap">Advance value entered on contracts that were later cancelled — confirm it was actually received, then refund or adjust</p>
       <div id="cxAdvList"></div>
     </section>
 
@@ -866,7 +866,9 @@ function load(){
       }
       state.data[t.key] = parseRecords(table, t.kind==="claim"?CLAIM_FIELDS:SHIPMENT_FIELDS, t.kind);
       if(t.key === "cancelled") state.data[t.key].forEach(function(r){
-        r.cancelled = true; r.stage = { t:"Cancelled", c:"critical" }; });
+        r.cancelled = true; r.stage = { t:"Cancelled", c:"critical" };
+        /* invoice/advance cells on a cancelled deal are contract terms, not collections */
+        r.pay = (r.sum.advanceValue||0) > 0 ? { t:"Advance recorded", c:"warn" } : { t:"No payment due", c:"mute" }; });
       state.err[t.key] = null;
     }).catch(function(e){
       state.data[t.key] = state.data[t.key] || [];
