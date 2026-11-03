@@ -49,13 +49,11 @@ counted in revenue, collected, outstanding, volume or any chart; the Overview
 shows only their count (and contracted MT) under the operational stats.
 
 The Overview has a **Cancelled** summary tile in the top row (count, share of
-all contracts, contracted MT — click it to list them), and below the other
-charts a **Cancellations** block (hidden when the tab is empty or missing,
-with a note saying why): cancelled by supplier and by buyer (hover shows that
-party's cancellation rate), by material, and over time (same
-Monthly/Quarterly/Yearly switch as Revenue). Any **advance already received
-on a cancelled contract** gets its own "refund or adjust" list. Every chart
-drills down to the contracts behind it.
+all contracts, contracted MT — click it to list them) and a **Cancellations**
+donut under the Claims donut showing contract outcomes (Completed / Live /
+Cancelled); click a slice to list those contracts. If a cancelled contract
+already received an advance, a "refund or adjust" list appears at the bottom.
+When the tab can't be read, or is empty, a note above the charts says why.
 
 If a contract appears on CANCELLED *and* still on LIVE or COMPLETED (copied
 across but the old row not deleted), the Cancelled entry wins — it is dropped
