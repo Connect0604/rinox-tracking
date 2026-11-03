@@ -700,6 +700,11 @@ function buildMap(cols, defs){
    carries no identity is folded into the record above it. */
 function parseRecords(table, defs, kind){
   var map = buildMap(table.cols, defs);
+  /* Some tabs leave PAYMENT TERMS without a heading; it sits right after CONTRACT DATE. */
+  if(map.contractDate !== undefined && map.paymentTerms === undefined && defs.some(function(d){ return d.k==="paymentTerms"; })){
+    var nx = table.cols[map.contractDate+1];
+    if(nx && !norm(nx.label)) map.paymentTerms = map.contractDate+1;
+  }
   var idKeys = kind==="claim" ? ["buyer","contractNo"] : ["tsNo","supplier","contractNo"];
   var recs = [];
 
@@ -932,6 +937,16 @@ function cancelInsights(cancelled, active){
     mt:cancelled.reduce(function(a,r){ return a + (r.sum.contractQty||0); }, 0),
     withAdvance:withAdvance
   };
+}
+
+/* A cancelled deal has no real invoice, so show the invoice value if the sheet
+   has one, else quantity × price — only when the contract has a single price. */
+function contractValue(r){
+  if(r.sum.invoiceValue) return { n:r.sum.invoiceValue, est:false };
+  var prices = vAll(r,"priceUsd").map(function(t){ return parseFloat(String(t).replace(/[^0-9.\-]/g,"")); })
+    .filter(function(n){ return !isNaN(n) && n > 0; });
+  var q = r.sum.contractQty;
+  return (prices.length === 1 && q) ? { n:prices[0]*q, est:true } : null;
 }
 
 function computeOverview(){
@@ -1550,6 +1565,54 @@ function columns(){
           if(r.statusExtra > 0)
             td.appendChild(el("div","sub2", "+" + r.statusExtra + " other status on this contract"));
         } }
+    ];
+  }
+  if(current().key === "cancelled"){
+    return [
+      { k:"tsNo", t:"TS", num:1, sort:1,
+        val:function(r){ var n = parseFloat(v(r,"tsNo")); return isNaN(n) ? null : n; },
+        cell:function(r,td){ td.textContent = v(r,"tsNo") || "—"; } },
+      { k:"contractNo", t:"Contract", sort:1, val:function(r){ return v(r,"contractNo"); },
+        cell:function(r,td){
+          td.appendChild(el("div","strong clip w2", v(r,"contractNo") || "—"));
+          var d = v(r,"contractDate"); if(d) td.appendChild(el("div","sub2", d));
+        } },
+      { k:"supplier", t:"Supplier → Buyer", sort:1, val:function(r){ return v(r,"supplier"); },
+        cell:function(r,td){
+          td.appendChild(el("div","clip w2", v(r,"supplier") || "—"));
+          td.appendChild(el("div","sub2", "→ " + (v(r,"buyer") || "—")));
+        } },
+      { k:"material", t:"Material", sort:1, val:function(r){ return v(r,"material"); },
+        cell:function(r,td){
+          td.appendChild(el("div","clip", v(r,"material") || "—"));
+          var o = v(r,"origin"); if(o) td.appendChild(el("div","sub2", o));
+        } },
+      { k:"contractQty", t:"Qty (MT)", num:1, sort:1, val:function(r){ return r.sum.contractQty; },
+        cell:function(r,td){
+          td.textContent = qty(r.sum.contractQty);
+          var n = parseFloat(String(v(r,"priceUsd")).replace(/[^0-9.\-]/g,""));
+          if(!isNaN(n)) td.appendChild(el("div","sub2", "@ " + money(n) + "/MT"));
+        } },
+      { k:"value", t:"Contract value", num:1, sort:1,
+        val:function(r){ var c = contractValue(r); return c ? c.n : null; },
+        cell:function(r,td){
+          var c = contractValue(r);
+          td.textContent = c ? money(c.n) : "—";
+          if(c && c.est) td.appendChild(el("div","sub2", "qty × price"));
+        } },
+      { k:"terms", t:"Payment terms", val:function(r){ return v(r,"paymentTerms"); },
+        cell:function(r,td){ td.appendChild(el("div","clip w2", v(r,"paymentTerms") || "—")); } },
+      { k:"stage", t:"Status", val:function(r){ return r.stage.t; },
+        cell:function(r,td){
+          var w = el("div","chips");
+          w.appendChild(chip(r.stage.t, r.stage.c));
+          w.appendChild(chip(r.pay.t, r.pay.c));
+          td.appendChild(w);
+          var a = r.sum.advanceValue;
+          if(a) td.appendChild(el("div","sub2", money(a) + " advance"));
+        } },
+      { k:"remarks", t:"Remarks", val:function(r){ return vAll(r,"remarks").join(" "); },
+        cell:function(r,td){ td.appendChild(el("div","clip w2", vAll(r,"remarks").join(" · ") || "—")); } }
     ];
   }
   return [

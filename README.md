@@ -48,6 +48,12 @@ and uses the same columns as LIVE/COMPLETED. Cancelled contracts are **not**
 counted in revenue, collected, outstanding, volume or any chart; the Overview
 shows only their count (and contracted MT) under the operational stats.
 
+The Cancelled tab has its own table: TS, contract (+date), supplier → buyer,
+material (+origin), qty (+price/MT), contract value (the invoice value if the
+sheet has one, otherwise qty × price when there is a single price — marked
+"qty × price"), payment terms, status and remarks. A heading-less column right
+after CONTRACT DATE is read as PAYMENT TERMS.
+
 The Overview has a **Cancelled** summary tile in the top row (count, share of
 all contracts, contracted MT — click it to list them) and a **Cancellations**
 donut under the Claims donut showing contract outcomes (Completed / Live /
