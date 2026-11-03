@@ -363,6 +363,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       </section>
     </div>
 
+    <p class="qnote" id="ovCxNote" hidden></p>
     <div class="ovgrid" id="ovCancel" hidden>
       <section class="card chart" id="cardCxSum">
         <h2>Cancellations</h2>
@@ -463,7 +464,7 @@ var TABS = [
   { key:"claims",    sheet:"CLAIMS Dong-A , SHINSUNG", label:"Claims",    kind:"claim"    },
   /* Several spellings are tried: gviz quietly serves the FIRST tab (LIVE) when
      a name doesn't match, so each reply is checked against LIVE (see load()). */
-  { key:"cancelled", sheet:["CANCELLED","Cancelled","cancelled"], label:"Cancelled", kind:"shipment" }
+  { key:"cancelled", sheet:["CANCELLED","Cancelled","cancelled","CANCELED","Canceled","canceled","CANCELLED ","Cancelled ","CANCEL","Cancel"], label:"Cancelled", kind:"shipment" }
 ];
 
 /* Canonical fields, matched against the sheet's own header labels so inserting
@@ -619,12 +620,27 @@ function fetchSheet(name){
 /* Try a list of tab names in turn. gviz answers an unknown tab name with the
    spreadsheet's first tab instead of an error, so a reply identical to LIVE
    means "not this name" — otherwise LIVE would be double-counted. */
+/* If Google couldn't tell which row is the header (labels come back blank),
+   the header text sits in the first data rows instead. Use the first of the
+   top rows that looks like a header. Only applied to the Cancelled tab. */
+function withHeaderFallback(table, defs){
+  if(Object.keys(buildMap(table.cols, defs)).length >= 3) return table;
+  var rows = table.rows || [];
+  for(var i=0; i<Math.min(rows.length,6); i++){
+    var cells = rows[i].c || [];
+    var cols = cells.map(function(c){ return { label: c && c.v!=null ? String(c.v) : "" }; });
+    if(Object.keys(buildMap(cols, defs)).length >= 3)
+      return { cols:cols, rows:rows.slice(i+1) };
+  }
+  return table;
+}
 function tableSig(tb){ return JSON.stringify((tb && tb.rows || []).slice(0,50)); }
 function fetchAlt(names, getLive, getLiveJob){
   var i = 0;
   function next(){
     if(i >= names.length)
-      return Promise.reject(new Error("No tab named \"" + names[0] + "\" found in the sheet."));
+      return Promise.reject(new Error("No tab named \"" + names[0] + "\" found in the sheet (also tried " +
+        names.slice(1,5).join(", ") + " …). Check the exact tab name."));
     var name = names[i++];
     return Promise.all([fetchSheet(name), (getLiveJob() || Promise.resolve()).catch(function(){})])
       .then(function(r){
@@ -790,7 +806,7 @@ function tabFromHash(){
   var h = (location.hash || "").replace(/^#/,"").toLowerCase();
   return TABS.some(function(t){ return t.key === h; }) ? h : "overview";
 }
-var state = { tab:tabFromHash(), data:{}, err:{}, sort:{}, q:"", supplier:"", buyer:"", origin:"",
+var state = { tab:tabFromHash(), data:{}, err:{}, diag:{}, sort:{}, q:"", supplier:"", buyer:"", origin:"",
   synced:null, trendPeriod:"month" };
 var today = new Date(); today.setHours(0,0,0,0);
 
@@ -850,6 +866,15 @@ function load(){
       p = fetchAlt(t.sheet, function(){ return liveTable; }, function(){ return liveJob; });
     }
     return p.then(function(table){
+      if(t.key === "cancelled"){
+        var fixed = withHeaderFallback(table, SHIPMENT_FIELDS);
+        state.diag.cancelled = {
+          rows:(table.rows||[]).length,
+          labels:(fixed.cols||[]).map(function(c){ return clean(c.label); }).filter(Boolean),
+          mapped:Object.keys(buildMap(fixed.cols, SHIPMENT_FIELDS)).length
+        };
+        table = fixed;
+      }
       state.data[t.key] = parseRecords(table, t.kind==="claim"?CLAIM_FIELDS:SHIPMENT_FIELDS, t.kind);
       if(t.key === "cancelled") state.data[t.key].forEach(function(r){
         r.cancelled = true; r.stage = { t:"Cancelled", c:"critical" }; });
@@ -1397,8 +1422,24 @@ function renderOverview(){
 }
 
 function renderCancellations(o, T, palette){
-  var wrap = $("ovCancel"), cx = o.cx;
+  var wrap = $("ovCancel"), cx = o.cx, note = $("ovCxNote");
   wrap.hidden = !!o.cancelledErr || !cx.n;
+  /* Say why the section is missing rather than silently hiding it. */
+  var d = state.diag.cancelled;
+  if(o.cancelledErr){
+    note.hidden = false;
+    note.textContent = "Cancellations can't be shown — the Cancelled tab couldn't be read: " + o.cancelledErr;
+  } else if(!cx.n){
+    note.hidden = false;
+    if(d && d.rows === 0) note.textContent = "The Cancelled tab was found but has no rows yet — Cancellations will appear once contracts are added to it.";
+    else note.textContent = "The Cancelled tab was read (" + (d ? d.rows : 0) + " row" + (d && d.rows===1?"":"s") +
+      ") but no cancelled contracts were recognised" +
+      (d && d.labels.length ? ". Column headings found: " + d.labels.slice(0,12).join(", ") : " — no column headings found") +
+      ". It needs headings like TS NO, SUPPLIER NAME, BUYER NAME, CONTRACT NO.";
+  } else if(d && d.mapped < 5){
+    note.hidden = false;
+    note.textContent = "Cancelled tab: only " + d.mapped + " columns matched the usual headings, so some details may be blank. Found: " + d.labels.slice(0,12).join(", ");
+  } else note.hidden = true;
   if(wrap.hidden) return;
 
   var sum = $("ovCxSum"); sum.innerHTML = "";
