@@ -7,7 +7,7 @@
    the app's own existing "Could not load this tab" / "Sync failed" states,
    which is the honest behavior. */
 
-var SHELL_CACHE = "rinox-shell-v2";
+var SHELL_CACHE = "rinox-shell-v3";
 var SHELL_FILES = [
   "./",
   "./index.html",
@@ -21,7 +21,11 @@ var SHELL_FILES = [
 self.addEventListener("install", function(e){
   self.skipWaiting();
   e.waitUntil(
-    caches.open(SHELL_CACHE).then(function(cache){ return cache.addAll(SHELL_FILES); })
+    caches.open(SHELL_CACHE).then(function(cache){ 
+      /* cache:"reload" skips the browser's HTTP cache (GitHub Pages sends
+         max-age=600), so a new version never installs a stale index.html. */
+      return cache.addAll(SHELL_FILES.map(function(u){ return new Request(u, {cache:"reload"}); }));
+    })
   );
 });
 
@@ -44,8 +48,23 @@ self.addEventListener("fetch", function(e){
   var isChartJs = url.indexOf("cdnjs.cloudflare.com/ajax/libs/Chart.js") !== -1;
   if(!sameOrigin && !isChartJs) return;
 
-  /* Stale-while-revalidate: serve the cached shell instantly, refresh it
-     in the background for next time. */
+  /* The page itself (index.html) is network-first: online, you always get the
+     latest deploy; offline, the cached copy. Other shell files (icons,
+     Chart.js) stay stale-while-revalidate since they rarely change. */
+  var isPage = e.request.mode === "navigate" || /\/(index\.html)?(\?|#|$)/.test(url.replace(self.location.origin,""));
+  if(isPage && sameOrigin){
+    e.respondWith(
+      fetch(e.request, {cache:"no-cache"}).then(function(res){
+        if(res && res.ok){ var copy = res.clone();
+          caches.open(SHELL_CACHE).then(function(c){ c.put(e.request, copy); }); }
+        return res;
+      }).catch(function(){
+        return caches.match(e.request).then(function(c){ return c || caches.match("./index.html"); });
+      })
+    );
+    return;
+  }
+
   e.respondWith(
     caches.open(SHELL_CACHE).then(function(cache){
       return cache.match(e.request).then(function(cached){

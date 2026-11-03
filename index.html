@@ -1714,6 +1714,14 @@ if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   window.addEventListener("load", function(){
     navigator.serviceWorker.register("sw.js").catch(function(){});
   });
+  /* When a newer version takes over an already-open page, reload once so
+     the new version shows immediately instead of on the next visit. */
+  if(navigator.serviceWorker.controller){
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if(reloaded) return; reloaded = true; location.reload();
+    });
+  }
 }
 
 })();
