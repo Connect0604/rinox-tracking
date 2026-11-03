@@ -108,7 +108,7 @@ body{
 
 /* ---------- stats ---------- */
 #overviewWrap{margin-top:16px}
-.stats{display:grid;grid-template-columns:1.25fr repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:1.25fr repeat(5,1fr);gap:12px;margin-bottom:16px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
   box-shadow:var(--shadow),var(--inset-hi)}
 .tile{padding:17px 19px;min-width:0;position:relative}
@@ -136,6 +136,7 @@ body{
 /* ---------- overview dashboard ---------- */
 .qnote{margin:-2px 0 12px;font-size:12px;color:var(--muted);
   display:flex;align-items:center;gap:6px}
+.qnote[hidden]{display:none}
 .qnote::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warn);flex:none}
 .ovgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
 .ovgrid .span2{grid-column:span 2}
@@ -365,12 +366,6 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <p class="qnote" id="ovCxNote" hidden></p>
     <div class="ovgrid" id="ovCancel" hidden>
-      <section class="card chart" id="cardCxSum">
-        <h2>Cancellations</h2>
-        <p class="cap">From the Cancelled tab — not counted in revenue</p>
-        <div class="oplist" id="ovCxSum"></div>
-      </section>
-
       <section class="card chart" id="cardCxSup">
         <h2>Cancelled by supplier</h2>
         <p class="cap">Cancelled contracts, with share of that supplier's deals — click a bar</p>
@@ -383,18 +378,24 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="cv h-bar"><canvas id="chCxBuy"></canvas></div>
       </section>
 
-      <section class="card chart span2" id="cardCxTrend">
-        <h2>Cancellations over time</h2>
-        <p class="cap">Cancelled contracts by contract date, grouped like the Revenue chart — click a bar</p>
-        <div class="cv h-trend"><canvas id="chCxTrend"></canvas></div>
-      </section>
-
       <section class="card chart" id="cardCxMat">
         <h2>Cancelled by material</h2>
         <p class="cap">Contracted quantity, MT — click a slice</p>
         <div class="cv h-donut"><canvas id="chCxMat"></canvas></div>
       </section>
+
+      <section class="card chart" style="grid-column:1/-1" id="cardCxTrend">
+        <h2>Cancellations over time</h2>
+        <p class="cap">Cancelled contracts by contract date, grouped like the Revenue chart — click a bar</p>
+        <div class="cv h-trend"><canvas id="chCxTrend"></canvas></div>
+      </section>
     </div>
+
+    <section class="card flcard" id="cardCxAdv" hidden>
+      <h2>Cancelled — advance received</h2>
+      <p class="cap">Money already paid on contracts that were later cancelled — refund or adjust</p>
+      <div id="cxAdvList"></div>
+    </section>
 
     <section class="card flcard" id="cardDrill" hidden>
       <div class="flhead">
@@ -1214,6 +1215,18 @@ function renderOverview(){
   var claimPct = o.revenue ? (100*o.claimTotal/o.revenue) : 0;
   s.appendChild(tile("","Claims", compact(o.claimTotal),
     claimPct.toFixed(1) + "% of revenue · " + o.claimOpenN + " open"));
+  var cxTile = tile("","Cancelled", o.cancelledErr ? "—" : String(o.cancelled.length),
+    o.cancelledErr ? "Cancelled tab not loaded"
+      : (o.cancelled.length ? Math.round(o.cx.rate*100) + "% of contracts · " + qty(o.cx.mt) + " MT"
+                            : "No cancelled contracts"));
+  if(!o.cancelledErr && o.cancelled.length){
+    cxTile.style.cursor = "pointer"; cxTile.tabIndex = 0;
+    var openCx = function(){ showDrill("Cancelled contracts", o.cancelled.length + " contract" +
+      (o.cancelled.length===1?"":"s") + " · " + qty(o.cx.mt) + " MT contracted", o.cancelled, "shipment"); };
+    cxTile.onclick = openCx;
+    cxTile.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openCx(); } };
+  }
+  s.appendChild(cxTile);
 
   /* revenue trend — stacked bar, Completed + Live, by month/quarter/year */
   makeChart("chTrend", {
@@ -1440,31 +1453,24 @@ function renderCancellations(o, T, palette){
     note.hidden = false;
     note.textContent = "Cancelled tab: only " + d.mapped + " columns matched the usual headings, so some details may be blank. Found: " + d.labels.slice(0,12).join(", ");
   } else note.hidden = true;
-  if(wrap.hidden) return;
+  if(wrap.hidden){ $("cardCxAdv").hidden = true; return; }
 
-  var sum = $("ovCxSum"); sum.innerHTML = "";
-  function op(k,val,sub,onclick){
-    var d = el("div","op");
-    d.appendChild(el("div","k",k));
-    var vv = el("div","v",val);
-    if(sub) vv.appendChild(el("small",null,sub));
-    d.appendChild(vv);
-    if(onclick){ d.style.cursor = "pointer"; d.tabIndex = 0; d.onclick = onclick;
-      d.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onclick(); } }; }
-    sum.appendChild(d);
-  }
-  op("Cancelled contracts", String(cx.n), Math.round(cx.rate*100) + "% of all contracts",
-     function(){ showDrill("Cancelled contracts", cx.n+" contract"+(cx.n===1?"":"s"), o.cancelled, "shipment"); });
-  op("Contracted volume lost", qty(cx.mt) + " MT", null);
-  op("Est. contract value", cx.valued ? compact(cx.value) : "—",
-     cx.valued ? "qty × price, " + cx.valued + " of " + cx.n + " priced" : "No single price per MT to estimate from");
-  if(cx.withAdvance.length)
-    op("Advance held on cancelled", compact(cx.advance),
-       cx.withAdvance.length + " contract" + (cx.withAdvance.length>1?"s":"") + " — refund or adjust?",
-       function(){ showDrill("Cancelled with advance received", money(cx.advance)+" advance", cx.withAdvance, "shipment"); });
-  if(cx.latest)
-    op("Most recent", fmtDate(cx.latest.d), v(cx.latest.r,"contractNo") || ("TS "+v(cx.latest.r,"tsNo")),
-       function(){ openPanel(cx.latest.r, "shipment"); });
+  /* advance already paid on cancelled contracts — needs a refund or adjustment */
+  var advCard = $("cardCxAdv"), advList = $("cxAdvList");
+  advList.innerHTML = "";
+  advCard.hidden = !cx.withAdvance.length;
+  cx.withAdvance.slice().sort(function(a,b){ return b.sum.advanceValue - a.sum.advanceValue; })
+    .forEach(function(r){
+      var row = el("div","flrow");
+      var nm = el("div","flnm", v(r,"contractNo") || ("TS "+v(r,"tsNo")));
+      nm.appendChild(el("span","flsub", (v(r,"supplier")||"—") + "  →  " + (v(r,"buyer")||"—")));
+      row.appendChild(nm);
+      row.appendChild(el("div","flamt", money(r.sum.advanceValue,2) + " advance"));
+      row.onclick = function(){ openPanel(r, "shipment"); };
+      row.tabIndex = 0;
+      row.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openPanel(r,"shipment"); } };
+      advList.appendChild(row);
+    });
 
   function rateBar(id, rows, who){
     makeChart(id, {
