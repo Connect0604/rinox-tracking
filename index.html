@@ -363,6 +363,38 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       </section>
     </div>
 
+    <div class="ovgrid" id="ovCancel" hidden>
+      <section class="card chart" id="cardCxSum">
+        <h2>Cancellations</h2>
+        <p class="cap">From the Cancelled tab — not counted in revenue</p>
+        <div class="oplist" id="ovCxSum"></div>
+      </section>
+
+      <section class="card chart" id="cardCxSup">
+        <h2>Cancelled by supplier</h2>
+        <p class="cap">Cancelled contracts, with share of that supplier's deals — click a bar</p>
+        <div class="cv h-bar"><canvas id="chCxSup"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardCxBuy">
+        <h2>Cancelled by buyer</h2>
+        <p class="cap">Cancelled contracts, with share of that buyer's deals — click a bar</p>
+        <div class="cv h-bar"><canvas id="chCxBuy"></canvas></div>
+      </section>
+
+      <section class="card chart span2" id="cardCxTrend">
+        <h2>Cancellations over time</h2>
+        <p class="cap">Cancelled contracts by contract date, grouped like the Revenue chart — click a bar</p>
+        <div class="cv h-trend"><canvas id="chCxTrend"></canvas></div>
+      </section>
+
+      <section class="card chart" id="cardCxMat">
+        <h2>Cancelled by material</h2>
+        <p class="cap">Contracted quantity, MT — click a slice</p>
+        <div class="cv h-donut"><canvas id="chCxMat"></canvas></div>
+      </section>
+    </div>
+
     <section class="card flcard" id="cardDrill" hidden>
       <div class="flhead">
         <div>
@@ -819,6 +851,8 @@ function load(){
     }
     return p.then(function(table){
       state.data[t.key] = parseRecords(table, t.kind==="claim"?CLAIM_FIELDS:SHIPMENT_FIELDS, t.kind);
+      if(t.key === "cancelled") state.data[t.key].forEach(function(r){
+        r.cancelled = true; r.stage = { t:"Cancelled", c:"critical" }; });
       state.err[t.key] = null;
     }).catch(function(e){
       state.data[t.key] = state.data[t.key] || [];
@@ -873,6 +907,89 @@ function paymentConfirmed(rec){
   return /PAID|PAYMENT\s*(RECEIVED|DONE)/i.test(vAll(rec,"remarks").join(" "));
 }
 
+function bucketKeyFn(){
+  var period = state.trendPeriod || "month";
+  return function(d){
+    if(period === "year") return String(d.getFullYear());
+    if(period === "quarter") return d.getFullYear() + "-Q" + (Math.floor(d.getMonth()/3)+1);
+    return d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2);
+  };
+}
+function bucketLabelFn(){
+  var period = state.trendPeriod || "month";
+  return function(key, d){
+    if(period === "year") return key;
+    if(period === "quarter"){ var m = key.match(/^(\d{4})-Q(\d)$/); return "Q"+m[2]+" "+m[1].slice(2); }
+    return fmtMonth(d);
+  };
+}
+
+/* Per-MT price is listed per lot, so a contract value can only be estimated
+   when the contract carries a single price; otherwise it's left unpriced
+   rather than guessed. */
+function estValue(r){
+  var p = vAll(r,"priceUsd").map(function(t){ return parseFloat(String(t).replace(/[^0-9.\-]/g,"")); })
+            .filter(function(n){ return !isNaN(n) && n > 0; });
+  var q = r.sum.contractQty;
+  if(r.sum.invoiceValue) return r.sum.invoiceValue;
+  if(p.length === 1 && q) return p[0] * q;
+  return null;
+}
+
+function cancelInsights(cancelled, active, bucketKey, bucketLabel){
+  function group(key){
+    var m = {};
+    cancelled.forEach(function(r){
+      var k = v(r,key) || "(blank)";
+      if(!m[k]) m[k] = { k:k, n:0, mt:0, recs:[], total:0 };
+      m[k].n++; m[k].mt += r.sum.contractQty||0; m[k].recs.push(r);
+    });
+    var tot = {};
+    active.forEach(function(r){ var k = v(r,key) || "(blank)"; tot[k] = (tot[k]||0) + 1; });
+    return Object.keys(m).map(function(k){
+      var g = m[k]; g.total = g.n + (tot[k]||0); g.rate = g.n / g.total; return g;
+    }).sort(function(a,b){ return b.n - a.n || b.mt - a.mt; }).slice(0,8);
+  }
+  var trend = {};
+  var undated = 0;
+  cancelled.forEach(function(r){
+    var d = parseDate(v(r,"contractDate"));
+    if(!d){ undated++; return; }
+    var k = bucketKey(d);
+    if(!trend[k]) trend[k] = { key:k, d:d, n:0, mt:0, recs:[] };
+    trend[k].n++; trend[k].mt += r.sum.contractQty||0; trend[k].recs.push(r);
+  });
+  var months = Object.keys(trend).sort().map(function(k){
+    var b = trend[k]; b.label = bucketLabel(k, b.d); return b; });
+
+  var mat = {};
+  cancelled.forEach(function(r){
+    var k = v(r,"material") || "(blank)";
+    if(!mat[k]) mat[k] = { k:k, v:0, recs:[] };
+    mat[k].v += r.sum.contractQty||0; mat[k].recs.push(r);
+  });
+  var matRows = Object.keys(mat).map(function(k){ return mat[k]; }).sort(function(a,b){ return b.v-a.v; });
+  if(matRows.length > 4){
+    var rest = matRows.slice(3);
+    matRows = matRows.slice(0,3).concat([{ k:"Other", v:rest.reduce(function(a,r){ return a+r.v; },0),
+      recs:rest.reduce(function(a,r){ return a.concat(r.recs); },[]) }]);
+  }
+
+  var valued = 0, value = 0;
+  cancelled.forEach(function(r){ var x = estValue(r); if(x != null){ valued++; value += x; } });
+  var withAdvance = cancelled.filter(function(r){ return (r.sum.advanceValue||0) > 0; });
+  var advance = withAdvance.reduce(function(a,r){ return a + r.sum.advanceValue; }, 0);
+  var latest = null;
+  cancelled.forEach(function(r){ var d = parseDate(v(r,"contractDate")); if(d && (!latest || d > latest.d)) latest = { d:d, r:r }; });
+
+  return {
+    n:cancelled.length, rate: (cancelled.length + active.length) ? cancelled.length/(cancelled.length+active.length) : 0,
+    mt:cancelled.reduce(function(a,r){ return a + (r.sum.contractQty||0); }, 0),
+    value:value, valued:valued, advance:advance, withAdvance:withAdvance, latest:latest,
+    bySupplier:group("supplier"), byBuyer:group("buyer"), trend:months, undated:undated, byMaterial:matRows
+  };
+}
+
 function computeOverview(){
   var liveAll = recs("live"), compAll = recs("completed"), claims = recs("claims");
   var cancelled = recs("cancelled");
@@ -890,6 +1007,7 @@ function computeOverview(){
   var comp = compAll.filter(isCleanShipment);
   var excluded = (liveAll.length - live.length) + (compAll.length - comp.length);
   var cancelledMT = cancelled.reduce(function(a,r){ return a + (r.sum.contractQty||0); }, 0);
+  var cx = cancelInsights(cancelled, liveAll.concat(compAll), bucketKeyFn(), bucketLabelFn());
   var all = live.concat(comp);
 
   var followUp = comp.filter(function(r){
@@ -1000,7 +1118,7 @@ function computeOverview(){
   return {
     live:live, comp:comp, excluded:excluded, followUp:followUp,
     cancelled:cancelled, cancelledMT:cancelledMT, dupCancelled:dupCancelled,
-    cancelledErr:state.err.cancelled,
+    cancelledErr:state.err.cancelled, cx:cx,
     revenue:revenue, collected:collectedLive+collectedComp, outstanding:outstandingLive+outstandingComp,
     shippedMT:shippedMT, claimTotal:claimTotal, claimSettledVal:claimSettledVal, claimOpenVal:claimOpenVal,
     claimSettled:claimSettled, claimOpen:claimOpen,
@@ -1256,11 +1374,7 @@ function renderOverview(){
      "ETD → ETA");
   op("Live shipments overdue", String(o.overdue),
      "Arrived 14+ days ago, no final docs" + (o.liveCount ? " · of " + o.liveCount + " live" : ""));
-  var nAll = o.live.length + o.comp.length + o.cancelled.length;
-  op("Cancelled contracts", o.cancelledErr ? "—" : String(o.cancelled.length),
-     o.cancelledErr ? "Cancelled tab not loaded"
-       : (o.cancelledMT ? qty(o.cancelledMT) + " MT contracted · " : "") +
-         (nAll ? Math.round(100*o.cancelled.length/nAll) + "% of all contracts" : "Not counted in revenue"));
+  renderCancellations(o, T, donutPalette);
 
   /* needs-follow-up list */
   var flCard = $("cardFollowup"), fl = $("ovFollowup");
@@ -1282,6 +1396,108 @@ function renderOverview(){
   } else flCard.hidden = true;
 }
 
+function renderCancellations(o, T, palette){
+  var wrap = $("ovCancel"), cx = o.cx;
+  wrap.hidden = !!o.cancelledErr || !cx.n;
+  if(wrap.hidden) return;
+
+  var sum = $("ovCxSum"); sum.innerHTML = "";
+  function op(k,val,sub,onclick){
+    var d = el("div","op");
+    d.appendChild(el("div","k",k));
+    var vv = el("div","v",val);
+    if(sub) vv.appendChild(el("small",null,sub));
+    d.appendChild(vv);
+    if(onclick){ d.style.cursor = "pointer"; d.tabIndex = 0; d.onclick = onclick;
+      d.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onclick(); } }; }
+    sum.appendChild(d);
+  }
+  op("Cancelled contracts", String(cx.n), Math.round(cx.rate*100) + "% of all contracts",
+     function(){ showDrill("Cancelled contracts", cx.n+" contract"+(cx.n===1?"":"s"), o.cancelled, "shipment"); });
+  op("Contracted volume lost", qty(cx.mt) + " MT", null);
+  op("Est. contract value", cx.valued ? compact(cx.value) : "—",
+     cx.valued ? "qty × price, " + cx.valued + " of " + cx.n + " priced" : "No single price per MT to estimate from");
+  if(cx.withAdvance.length)
+    op("Advance held on cancelled", compact(cx.advance),
+       cx.withAdvance.length + " contract" + (cx.withAdvance.length>1?"s":"") + " — refund or adjust?",
+       function(){ showDrill("Cancelled with advance received", money(cx.advance)+" advance", cx.withAdvance, "shipment"); });
+  if(cx.latest)
+    op("Most recent", fmtDate(cx.latest.d), v(cx.latest.r,"contractNo") || ("TS "+v(cx.latest.r,"tsNo")),
+       function(){ openPanel(cx.latest.r, "shipment"); });
+
+  function rateBar(id, rows, who){
+    makeChart(id, {
+      type:"bar",
+      data:{ labels: rows.map(function(r){ return r.k; }),
+        datasets:[{ data: rows.map(function(r){ return r.n; }), backgroundColor:T.serious, borderRadius:3, maxBarThickness:22 }] },
+      options:{
+        indexAxis:"y", maintainAspectRatio:false, onHover:pointerHover,
+        onClick:function(evt, els){
+          if(!els.length) return;
+          var r = rows[els[0].index];
+          showDrill(r.k + " — cancelled", r.n + " of " + r.total + " " + who + " contracts (" +
+            Math.round(r.rate*100) + "%) · " + qty(r.mt) + " MT", r.recs, "shipment");
+        },
+        scales:{
+          x:{ ticks:{color:T.muted,font:{size:11},precision:0}, grid:{color:T.grid}, beginAtZero:true },
+          y:{ ticks:{color:T.ink2,font:{size:11.5}}, grid:{display:false} }
+        },
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(c){
+          var r = rows[c.dataIndex];
+          return r.n + " of " + r.total + " contracts (" + Math.round(r.rate*100) + "%) · " + qty(r.mt) + " MT";
+        } } } }
+      }
+    });
+    $(id).parentNode.style.height = Math.max(160, rows.length*30+30) + "px";
+  }
+  rateBar("chCxSup", cx.bySupplier, "supplier");
+  rateBar("chCxBuy", cx.byBuyer, "buyer");
+
+  makeChart("chCxTrend", {
+    type:"bar",
+    data:{ labels: cx.trend.map(function(b){ return b.label; }),
+      datasets:[{ label:"Cancelled", data: cx.trend.map(function(b){ return b.n; }),
+        backgroundColor:T.serious, borderRadius:3, maxBarThickness:48 }] },
+    options:{
+      maintainAspectRatio:false, onHover:pointerHover,
+      onClick:function(evt, els){
+        if(!els.length) return;
+        var b = cx.trend[els[0].index];
+        showDrill("Cancelled — " + b.label, b.n + " contract" + (b.n===1?"":"s") + " · " + qty(b.mt) + " MT", b.recs, "shipment");
+      },
+      scales:{
+        x:{ ticks:{color:T.muted,font:{size:11}}, grid:{display:false} },
+        y:{ beginAtZero:true, ticks:{color:T.muted,font:{size:11},precision:0}, grid:{color:T.grid} }
+      },
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(c){
+        var b = cx.trend[c.dataIndex]; return b.n + " cancelled · " + qty(b.mt) + " MT"; } } } }
+    }
+  });
+  $("cardCxTrend").querySelector(".cap").textContent =
+    "Cancelled contracts by contract date, grouped like the Revenue chart — click a bar" +
+    (cx.undated ? " · " + cx.undated + " without a readable contract date not shown" : "");
+
+  makeChart("chCxMat", {
+    type:"doughnut",
+    data:{ labels: cx.byMaterial.map(function(r){ return r.k; }),
+      datasets:[{ data: cx.byMaterial.map(function(r){ return Math.round(r.v*100)/100; }),
+        backgroundColor:palette, borderColor:T.surface, borderWidth:2 }] },
+    options:{
+      maintainAspectRatio:false, cutout:"62%", onHover:pointerHover,
+      onClick:function(evt, els){
+        if(!els.length) return;
+        var r = cx.byMaterial[els[0].index];
+        showDrill(r.k + " — cancelled", r.recs.length + " contract" + (r.recs.length===1?"":"s") + " · " + qty(r.v) + " MT", r.recs, "shipment");
+      },
+      plugins:{
+        legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
+          usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
+        tooltip:{ callbacks:{ label:function(c){ return c.label+": "+qty(c.parsed)+" MT"; } } }
+      }
+    }
+  });
+}
+
 /* click-through from any chart — one row per underlying record, same
    open-the-full-panel interaction as the follow-up list above */
 function drillRow(rec, kind){
@@ -1297,7 +1513,8 @@ function drillRow(rec, kind){
     nm2.appendChild(el("span","flsub", (v(rec,"supplier")||"—") + "  →  " + (v(rec,"buyer")||"—")));
     row.appendChild(nm2);
     row.appendChild(el("div","flamt neutral",
-      rec.sum.invoiceValue!=null ? money(rec.sum.invoiceValue) : "—"));
+      rec.sum.invoiceValue!=null ? money(rec.sum.invoiceValue)
+        : (rec.sum.contractQty ? qty(rec.sum.contractQty) + " MT" : "—")));
   }
   row.onclick = function(){ openPanel(rec, kind); };
   row.tabIndex = 0;

@@ -48,6 +48,15 @@ and uses the same columns as LIVE/COMPLETED. Cancelled contracts are **not**
 counted in revenue, collected, outstanding, volume or any chart; the Overview
 shows only their count (and contracted MT) under the operational stats.
 
+The Overview has a **Cancellations** section (hidden when the tab is empty
+or missing): count and cancellation rate, contracted MT lost, an estimated
+contract value (contract qty × price/MT — only for contracts with a single
+price, and it says how many were priced), any **advance received on a
+cancelled contract** (flagged for refund/adjustment), the most recent
+cancellation, and charts by supplier, buyer (each with that party's
+cancellation rate), period and material. Every figure and chart drills down
+to the contracts behind it.
+
 If a contract appears on CANCELLED *and* still on LIVE or COMPLETED (copied
 across but the old row not deleted), the Cancelled entry wins — it is dropped
 from the Live/Completed figures and the page says how many were affected.
