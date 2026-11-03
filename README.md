@@ -54,12 +54,24 @@ sheet has one, otherwise qty × price when there is a single price — marked
 "qty × price"), payment terms, status and remarks. A heading-less column right
 after CONTRACT DATE is read as PAYMENT TERMS.
 
-The Overview has a **Cancelled** summary tile in the top row (count, share of
-all contracts, contracted MT — click it to list them) and a **Cancellations**
-donut under the Claims donut showing contract outcomes (Completed / Live /
-Cancelled); click a slice to list those contracts. If a cancelled contract
-an advance value recorded, a "confirm and refund or adjust" list appears at the bottom.
-When the tab can't be read, or is empty, a note above the charts says why.
+The Overview is built to support decisions about cancellations:
+
+- **Cancelled tile** (top row) — contract value cancelled, contract count and
+  its share of total value (cancelled ÷ (cancelled + invoiced)). Contract value
+  is the invoice value if the sheet has one, otherwise qty × price when the
+  contract has a single price; unpriced contracts are counted and flagged.
+- **Cancellations donut** (under Claims) — value by outcome: Completed / Live
+  (invoiced) vs Cancelled (contract value); the legend shows value and count.
+- **Follow-up list** — only what the data shows: advance recorded on cancelled
+  contracts (confirm it was received, then refund/adjust), a buyer or supplier
+  with a high cancellation rate (≥2 cancelled and ≥50% of their contracts),
+  cancelled contracts with no reason in Remarks, and contracts that can't be
+  valued.
+- **Cancelled by buyer / supplier** — bar = value cancelled, small text =
+  cancelled of that party's contracts (cancellation rate).
+
+Everything drills down to the contracts behind it. When the tab can't be read,
+or is empty, a note above the charts says why.
 
 If a contract appears on CANCELLED *and* still on LIVE or COMPLETED (copied
 across but the old row not deleted), the Cancelled entry wins — it is dropped

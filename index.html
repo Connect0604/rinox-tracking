@@ -127,6 +127,10 @@ body{
 .bar{display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:12px;align-items:center;
   font-size:12.5px;border-radius:7px;padding:1px 0}
 .bar .nm{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .nm small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.bars.cxb .bar{grid-template-columns:minmax(110px,175px) 1fr auto}
+.bar .fill.cx{background:var(--serious)}
+.bar{cursor:pointer}
 .bar .track{height:12px;background:var(--grid);border-radius:4px;overflow:hidden}
 .bar .fill{height:100%;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px;
   transition:width .35s ease}
@@ -142,7 +146,7 @@ body{
 .ovgrid .span2{grid-column:span 2}
 .rside{display:grid;gap:12px;align-content:start;min-width:0}
 .rside .chart{margin-bottom:0}
-.rside .cv.h-donut{height:170px}
+.rside .cv.h-donut{height:190px}
 /* Revenue fills the height of the stacked donuts beside it */
 #cardTrend{display:flex;flex-direction:column;margin-bottom:0}
 #cardTrend .cv.h-trend{flex:1 1 0;height:auto;min-height:260px}
@@ -342,7 +346,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         </section>
         <section class="card chart" id="cardOutcome" hidden>
           <h2>Cancellations</h2>
-          <p class="cap">Contract outcomes, by count — click a slice for details</p>
+          <p class="cap" id="cxDonutCap">Contract value by outcome — click a slice</p>
           <div class="cv h-donut"><canvas id="chCx"></canvas></div>
         </section>
       </div>
@@ -379,11 +383,26 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </div>
 
     <p class="qnote" id="ovCxNote" hidden></p>
-    <section class="card flcard" id="cardCxAdv" hidden>
-      <h2>Cancelled — advance recorded</h2>
-      <p class="cap">Advance value entered on contracts that were later cancelled — confirm it was actually received, then refund or adjust</p>
-      <div id="cxAdvList"></div>
-    </section>
+    <div class="ovgrid" id="ovCancel" hidden>
+      <section class="card flcard" id="cardCxAct">
+        <h2>Cancellations — follow up</h2>
+        <p class="cap">What needs a decision or a clean-up — click a row for the contracts</p>
+        <div id="cxActList"></div>
+      </section>
+
+      <section class="card chart" id="cardCxBuy">
+        <h2>Cancelled by buyer</h2>
+        <p class="cap">Bar = value cancelled · small text = cancelled of that buyer's contracts</p>
+        <div class="bars cxb" id="cxBuyBars"></div>
+      </section>
+
+      <section class="card chart" id="cardCxSup">
+        <h2>Cancelled by supplier</h2>
+        <p class="cap">Bar = value cancelled · small text = cancelled of that supplier's contracts</p>
+        <div class="bars cxb" id="cxSupBars"></div>
+      </section>
+    </div>
+
 
     <section class="card flcard" id="cardDrill" hidden>
       <div class="flhead">
@@ -928,14 +947,36 @@ function paymentConfirmed(rec){
   return /PAID|PAYMENT\s*(RECEIVED|DONE)/i.test(vAll(rec,"remarks").join(" "));
 }
 
-/* What the cancellation tile / donut / follow-up list need — nothing more. */
+/* Everything the Cancellations tile, donut and follow-up block need. */
 function cancelInsights(cancelled, active){
+  var valued = 0, value = 0;
+  cancelled.forEach(function(r){
+    var c = contractValue(r); r.cxValue = c ? c.n : null;
+    if(c){ valued++; value += c.n; }
+  });
+  function group(key){
+    var m = {}, tot = {};
+    cancelled.forEach(function(r){
+      var k = v(r,key) || "(blank)";
+      var g = m[k] || (m[k] = { k:k, n:0, value:0, recs:[] });
+      g.n++; g.value += r.cxValue||0; g.recs.push(r);
+    });
+    active.forEach(function(r){ var k = v(r,key) || "(blank)"; tot[k] = (tot[k]||0) + 1; });
+    return Object.keys(m).map(function(k){
+      var g = m[k]; g.total = g.n + (tot[k]||0); g.rate = g.n / g.total; return g;
+    }).sort(function(a,b){ return b.value - a.value || b.n - a.n; }).slice(0,6);
+  }
   var withAdvance = cancelled.filter(function(r){ return (r.sum.advanceValue||0) > 0; });
+  /* a remark that only says "cancelled / contract cancelled" gives no reason */
+  var noReason = cancelled.filter(function(r){
+    return vAll(r,"remarks").join(" ").replace(/canc\w*|contract|[^a-z]/gi,"").length < 3; });
   return {
-    n:cancelled.length,
-    rate:(cancelled.length + active.length) ? cancelled.length/(cancelled.length+active.length) : 0,
+    n:cancelled.length, valued:valued, value:value,
+    unvalued:cancelled.filter(function(r){ return r.cxValue == null; }),
     mt:cancelled.reduce(function(a,r){ return a + (r.sum.contractQty||0); }, 0),
-    withAdvance:withAdvance
+    withAdvance:withAdvance,
+    advance:withAdvance.reduce(function(a,r){ return a + r.sum.advanceValue; }, 0),
+    noReason:noReason, byBuyer:group("buyer"), bySupplier:group("supplier")
   };
 }
 
@@ -1148,14 +1189,18 @@ function renderOverview(){
   var claimPct = o.revenue ? (100*o.claimTotal/o.revenue) : 0;
   s.appendChild(tile("","Claims", compact(o.claimTotal),
     claimPct.toFixed(1) + "% of revenue · " + o.claimOpenN + " open"));
-  var cxTile = tile("","Cancelled", o.cancelledErr ? "—" : String(o.cancelled.length),
+  var cxN = o.cancelled.length, cxPct = (o.cx.value + o.revenue) ? Math.round(100*o.cx.value/(o.cx.value + o.revenue)) : 0;
+  var cxTile = tile("","Cancelled",
+    o.cancelledErr ? "—" : (o.cx.valued ? compact(o.cx.value) : String(cxN)),
     o.cancelledErr ? "Cancelled tab not loaded"
-      : (o.cancelled.length ? Math.round(o.cx.rate*100) + "% of contracts · " + qty(o.cx.mt) + " MT"
-                            : "No cancelled contracts"));
+      : !cxN ? "No cancelled contracts"
+      : cxN + " contract" + (cxN===1?"":"s") + (o.cx.valued ? " · " + cxPct + "% of total value" : " · " + qty(o.cx.mt) + " MT") +
+        (o.cx.valued && o.cx.unvalued.length ? " · " + o.cx.unvalued.length + " unpriced" : ""));
   if(!o.cancelledErr && o.cancelled.length){
     cxTile.style.cursor = "pointer"; cxTile.tabIndex = 0;
     var openCx = function(){ showDrill("Cancelled contracts", o.cancelled.length + " contract" +
-      (o.cancelled.length===1?"":"s") + " · " + qty(o.cx.mt) + " MT contracted", o.cancelled, "shipment"); };
+      (o.cancelled.length===1?"":"s") + " · " + qty(o.cx.mt) + " MT" +
+      (o.cx.valued ? " · " + money(o.cx.value) + " contract value" : ""), o.cancelled, "shipment"); };
     cxTile.onclick = openCx;
     cxTile.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openCx(); } };
   }
@@ -1368,10 +1413,11 @@ function renderOverview(){
 }
 
 function renderCancellations(o, T){
-  var cx = o.cx, note = $("ovCxNote"), card = $("cardOutcome");
+  var cx = o.cx, note = $("ovCxNote"), card = $("cardOutcome"), block = $("ovCancel");
   card.hidden = !!o.cancelledErr || !cx.n;
+  block.hidden = card.hidden;
 
-  /* Say why the donut is missing rather than silently hiding it. */
+  /* Say why the section is missing rather than silently hiding it. */
   var d = state.diag.cancelled;
   if(o.cancelledErr){
     note.hidden = false;
@@ -1387,52 +1433,101 @@ function renderCancellations(o, T){
     note.hidden = false;
     note.textContent = "Cancelled tab: only " + d.mapped + " columns matched the usual headings, so some details may be blank. Found: " + d.labels.slice(0,12).join(", ");
   } else note.hidden = true;
-
-  /* advance already paid on cancelled contracts — needs a refund or adjustment */
-  var advCard = $("cardCxAdv"), advList = $("cxAdvList");
-  advList.innerHTML = "";
-  advCard.hidden = card.hidden || !cx.withAdvance.length;
-  if(!advCard.hidden) cx.withAdvance.slice().sort(function(a,b){ return b.sum.advanceValue - a.sum.advanceValue; })
-    .forEach(function(r){
-      var row = el("div","flrow");
-      var nm = el("div","flnm", v(r,"contractNo") || ("TS "+v(r,"tsNo")));
-      nm.appendChild(el("span","flsub", (v(r,"supplier")||"—") + "  →  " + (v(r,"buyer")||"—")));
-      row.appendChild(nm);
-      row.appendChild(el("div","flamt", money(r.sum.advanceValue,2) + " advance"));
-      row.onclick = function(){ openPanel(r, "shipment"); };
-      row.tabIndex = 0;
-      row.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openPanel(r,"shipment"); } };
-      advList.appendChild(row);
-    });
   if(card.hidden) return;
 
-  /* outcomes donut — status colors, labelled with counts (never color-alone) */
+  var pct = function(x){ return Math.round(100*x) + "%"; };
+  var plural = function(n, w){ return n + " " + w + (n===1?"":"s"); };
+
+  /* ---- outcomes donut: value when the cancelled contracts can be priced, else count ---- */
+  var useValue = cx.valued > 0;
+  var sumInv = function(a){ return a.reduce(function(t,r){ return t + (r.sum.invoiceValue||0); }, 0); };
   var slices = [
-    { t:"Completed", recs:o.comp,      c:T.good },
-    { t:"Live",      recs:o.live,      c:T.accent },
-    { t:"Cancelled", recs:o.cancelled, c:T.serious }
+    { t:"Completed", recs:o.comp,      val:sumInv(o.comp), c:T.good },
+    { t:"Live",      recs:o.live,      val:sumInv(o.live), c:T.accent },
+    { t:"Cancelled", recs:o.cancelled, val:cx.value,       c:T.serious }
   ];
+  slices = slices.filter(function(x){ return x.recs.length > 0; });
+  var amount = function(x){ return useValue ? x.val : x.recs.length; };
+  var total = slices.reduce(function(a,x){ return a + amount(x); }, 0);
+  $("cxDonutCap").textContent = useValue
+    ? "Value by outcome — Live & Completed invoiced, Cancelled contract value. Click a slice"
+    : "Contracts by outcome — click a slice";
   makeChart("chCx", {
     type:"doughnut",
-    data:{ labels:slices.map(function(x){ return x.t + " (" + x.recs.length + ")"; }),
-      datasets:[{ data:slices.map(function(x){ return x.recs.length; }),
-        backgroundColor:slices.map(function(x){ return x.c; }), borderColor:T.surface, borderWidth:2 }] },
+    data:{ labels:slices.map(function(x){
+        return x.t + " · " + (useValue ? compact(x.val) + " (" + x.recs.length + ")" : x.recs.length); }),
+      datasets:[{ data:slices.map(amount), backgroundColor:slices.map(function(x){ return x.c; }),
+        borderColor:T.surface, borderWidth:2 }] },
     options:{
       maintainAspectRatio:false, cutout:"62%", onHover:pointerHover,
       onClick:function(evt, els){
         if(!els.length) return;
         var x = slices[els[0].index];
-        showDrill(x.t + " contracts", x.recs.length + " contract" + (x.recs.length===1?"":"s"), x.recs, "shipment");
+        showDrill(x.t + " contracts", plural(x.recs.length,"contract") + (useValue ? " · " + money(x.val) : ""), x.recs, "shipment");
       },
       plugins:{
         legend:{ position:"bottom", labels:{color:T.ink2,boxWidth:10,boxHeight:10,
           usePointStyle:true,pointStyle:"circle",font:{size:11.5},padding:10} },
         tooltip:{ callbacks:{ label:function(c){
-          var tot = c.dataset.data.reduce(function(a,b){ return a+b; },0);
-          return c.label + " — " + (tot ? Math.round(100*c.parsed/tot) : 0) + "%"; } } }
+          var x = slices[c.dataIndex];
+          return x.t + ": " + (useValue ? money(x.val) : plural(x.recs.length,"contract")) +
+            " — " + (total ? pct(amount(x)/total) : "0%"); } } }
       }
     }
   });
+
+  /* ---- by buyer / by supplier: bar = value cancelled, small text = cancellation rate ---- */
+  function partyBars(id, rows){
+    var box = $(id); box.innerHTML = "";
+    var max = rows.reduce(function(a,r){ return Math.max(a, useValue ? r.value : r.n); }, 0) || 1;
+    rows.forEach(function(r){
+      var row = el("div","bar");
+      var nm = el("div","nm", r.k); nm.title = r.k;
+      nm.appendChild(el("small", null, r.n + " of " + r.total + " cancelled · " + pct(r.rate)));
+      row.appendChild(nm);
+      var tr = el("div","track"), f = el("div","fill cx");
+      f.style.width = Math.max(3, 100*(useValue ? r.value : r.n)/max) + "%";
+      tr.appendChild(f); row.appendChild(tr);
+      row.appendChild(el("div","amt", useValue ? compact(r.value) : String(r.n)));
+      row.onclick = function(){ showDrill(r.k + " — cancelled", plural(r.n,"contract") + " of " + r.total +
+        " (" + pct(r.rate) + ")" + (useValue ? " · " + money(r.value) : ""), r.recs, "shipment"); };
+      box.appendChild(row);
+    });
+  }
+  partyBars("cxBuyBars", cx.byBuyer);
+  partyBars("cxSupBars", cx.bySupplier);
+
+  /* ---- follow-up list: only things the data actually shows ---- */
+  var list = $("cxActList"); list.innerHTML = "";
+  function action(title, sub, amt, recs, cap){
+    var row = el("div","flrow");
+    var nm = el("div","flnm", title); nm.appendChild(el("span","flsub", sub));
+    row.appendChild(nm);
+    if(amt) row.appendChild(el("div","flamt", amt));
+    row.onclick = function(){ showDrill(title, cap || plural(recs.length,"contract"), recs, "shipment"); };
+    row.tabIndex = 0;
+    row.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); row.onclick(); } };
+    list.appendChild(row);
+  }
+  if(cx.withAdvance.length)
+    action("Confirm and refund / adjust advance",
+      "Advance is recorded on " + plural(cx.withAdvance.length,"cancelled contract") + " — check it was actually received",
+      money(cx.advance), cx.withAdvance, money(cx.advance) + " advance recorded");
+  [["buyer", cx.byBuyer], ["supplier", cx.bySupplier]].forEach(function(g){
+    var top = g[1].filter(function(r){ return r.n >= 2 && r.rate >= 0.5; })[0];
+    if(top) action("Review " + g[0] + ": " + top.k,
+      top.n + " of " + plural(top.total,"contract") + " cancelled (" + pct(top.rate) + ") — high cancellation rate",
+      useValue ? compact(top.value) : null, top.recs);
+  });
+  if(cx.noReason.length)
+    action("Record why contracts were cancelled",
+      cx.noReason.length + " of " + cx.n + " have no reason in Remarks — needed to tell buyer-side from supplier-side cancellations",
+      null, cx.noReason);
+  if(cx.unvalued.length)
+    action("Add price or value",
+      plural(cx.unvalued.length,"cancelled contract") + " can't be valued (no invoice value or single price per MT)",
+      null, cx.unvalued);
+  if(!list.children.length) list.appendChild(el("div","empty","Nothing needs follow-up."));
 }
 
 /* click-through from any chart — one row per underlying record, same
