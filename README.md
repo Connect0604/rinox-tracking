@@ -41,6 +41,21 @@ Two upstream data quirks are corrected for in this view, not just displayed:
   completed contract with a balance and **no** such remark lands in "Needs
   follow-up" instead of being silently counted as paid.
 
+## Cancelled tab
+
+The **Cancelled** tab reads the sheet's `CANCELLED` tab (any capitalisation)
+and uses the same columns as LIVE/COMPLETED. Cancelled contracts are **not**
+counted in revenue, collected, outstanding, volume or any chart; the Overview
+shows only their count (and contracted MT) under the operational stats.
+
+If a contract appears on CANCELLED *and* still on LIVE or COMPLETED (copied
+across but the old row not deleted), the Cancelled entry wins — it is dropped
+from the Live/Completed figures and the page says how many were affected.
+
+Google's endpoint silently returns the first tab (LIVE) when a tab name
+doesn't match, so the dashboard checks the reply against LIVE and shows
+"No tab named CANCELLED found" rather than double-counting LIVE.
+
 Supplier/buyer/material names are shown exactly as typed in the sheet
 (`DONGA` vs `DONGA-SPECIAL` are kept separate) — nothing is auto-merged.
 
@@ -73,7 +88,7 @@ Sheets will not break it. Renaming a header will — update the `h:` entries in
   rather than summed, and the lot lines appear in the detail panel.
 - Rows holding only a TS number are treated as placeholders and hidden.
 - Data refreshes on load, on **Refresh**, and automatically every 5 minutes.
-- `#live`, `#completed`, `#claims` in the URL open that tab directly.
+- `#live`, `#completed`, `#claims`, `#cancelled` in the URL open that tab directly.
 - Press `/` to jump to search; `Esc` closes the detail panel.
 
 ## Editing

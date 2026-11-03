@@ -428,7 +428,10 @@ var TABS = [
   { key:"overview",  sheet:null,                       label:"Overview",  kind:"overview" },
   { key:"live",      sheet:"LIVE",                     label:"Live",      kind:"shipment" },
   { key:"completed", sheet:"COMPLETED",                label:"Completed", kind:"shipment" },
-  { key:"claims",    sheet:"CLAIMS Dong-A , SHINSUNG", label:"Claims",    kind:"claim"    }
+  { key:"claims",    sheet:"CLAIMS Dong-A , SHINSUNG", label:"Claims",    kind:"claim"    },
+  /* Several spellings are tried: gviz quietly serves the FIRST tab (LIVE) when
+     a name doesn't match, so each reply is checked against LIVE (see load()). */
+  { key:"cancelled", sheet:["CANCELLED","Cancelled","cancelled"], label:"Cancelled", kind:"shipment" }
 ];
 
 /* Canonical fields, matched against the sheet's own header labels so inserting
@@ -579,6 +582,26 @@ function fetchSheet(name){
           + "&headers=1&tq=&_=" + Date.now();
     document.head.appendChild(s);
   });
+}
+
+/* Try a list of tab names in turn. gviz answers an unknown tab name with the
+   spreadsheet's first tab instead of an error, so a reply identical to LIVE
+   means "not this name" — otherwise LIVE would be double-counted. */
+function tableSig(tb){ return JSON.stringify((tb && tb.rows || []).slice(0,50)); }
+function fetchAlt(names, getLive, getLiveJob){
+  var i = 0;
+  function next(){
+    if(i >= names.length)
+      return Promise.reject(new Error("No tab named \"" + names[0] + "\" found in the sheet."));
+    var name = names[i++];
+    return Promise.all([fetchSheet(name), (getLiveJob() || Promise.resolve()).catch(function(){})])
+      .then(function(r){
+        var live = getLive();
+        if(live && tableSig(r[0]) === tableSig(live)) return next();
+        return r[0];
+      }, function(){ return next(); });
+  }
+  return next();
 }
 
 /* ============================ FX reference rate ============================
@@ -745,7 +768,7 @@ function recs(key){ return state.data[key] || []; }
 /* ============================ loading ============================ */
 /* Sync progress bar — same track YouTube/GitHub use: trailing increments
    that creep toward ~90% while the fetch is in flight (true progress of
-   three parallel JSONP loads isn't observable), then snap to 100% and
+   the parallel JSONP loads isn't observable), then snap to 100% and
    fade out the instant load() actually settles. */
 var topbarTimer = null;
 function topbarStart(){
@@ -784,8 +807,17 @@ function load(){
   $("dot").className = "dot busy";
   $("syncTxt").textContent = "Syncing…";
   topbarStart();
+  var liveTable = null;
+  var liveJob = null;
   var jobs = TABS.filter(function(t){ return t.sheet; }).map(function(t){
-    return fetchSheet(t.sheet).then(function(table){
+    var p;
+    if(typeof t.sheet === "string"){
+      p = fetchSheet(t.sheet);
+      if(t.key === "live") liveJob = p = p.then(function(tb){ liveTable = tb; return tb; });
+    } else {
+      p = fetchAlt(t.sheet, function(){ return liveTable; }, function(){ return liveJob; });
+    }
+    return p.then(function(table){
       state.data[t.key] = parseRecords(table, t.kind==="claim"?CLAIM_FIELDS:SHIPMENT_FIELDS, t.kind);
       state.err[t.key] = null;
     }).catch(function(e){
@@ -843,9 +875,21 @@ function paymentConfirmed(rec){
 
 function computeOverview(){
   var liveAll = recs("live"), compAll = recs("completed"), claims = recs("claims");
+  var cancelled = recs("cancelled");
+  /* Cancelled contracts are never revenue. If one was copied to CANCELLED but
+     not yet deleted from LIVE/COMPLETED, CANCELLED wins — matched on contract
+     no (or TS no when the contract no is blank). */
+  var cancelKey = {};
+  function idOf(r){ var c = norm(v(r,"contractNo")); return c ? "C"+c : (v(r,"tsNo") ? "T"+norm(v(r,"tsNo")) : ""); }
+  cancelled.forEach(function(r){ var k = idOf(r); if(k) cancelKey[k] = 1; });
+  function notCancelled(r){ var k = idOf(r); return !(k && cancelKey[k]); }
+  var dupCancelled = liveAll.concat(compAll).filter(function(r){ return !notCancelled(r); }).length;
+  liveAll = liveAll.filter(notCancelled);
+  compAll = compAll.filter(notCancelled);
   var live = liveAll.filter(isCleanShipment);
   var comp = compAll.filter(isCleanShipment);
   var excluded = (liveAll.length - live.length) + (compAll.length - comp.length);
+  var cancelledMT = cancelled.reduce(function(a,r){ return a + (r.sum.contractQty||0); }, 0);
   var all = live.concat(comp);
 
   var followUp = comp.filter(function(r){
@@ -955,6 +999,8 @@ function computeOverview(){
 
   return {
     live:live, comp:comp, excluded:excluded, followUp:followUp,
+    cancelled:cancelled, cancelledMT:cancelledMT, dupCancelled:dupCancelled,
+    cancelledErr:state.err.cancelled,
     revenue:revenue, collected:collectedLive+collectedComp, outstanding:outstandingLive+outstandingComp,
     shippedMT:shippedMT, claimTotal:claimTotal, claimSettledVal:claimSettledVal, claimOpenVal:claimOpenVal,
     claimSettled:claimSettled, claimOpen:claimOpen,
@@ -1001,12 +1047,16 @@ function renderOverview(){
   $("trendPeriod").value = o.period;
 
   /* data-quality note */
-  var qn = $("ovQuality");
-  if(o.excluded){
-    qn.hidden = false;
-    qn.textContent = o.excluded + " legacy record" + (o.excluded>1?"s":"") +
-      " excluded from the figures below (a pre-2026 column shift in the sheet — see the Completed tab, oldest rows).";
-  } else qn.hidden = true;
+  var qn = $("ovQuality"), notes = [];
+  if(o.excluded)
+    notes.push(o.excluded + " legacy record" + (o.excluded>1?"s":"") +
+      " excluded from the figures below (a pre-2026 column shift in the sheet — see the Completed tab, oldest rows).");
+  if(o.dupCancelled)
+    notes.push(o.dupCancelled + " contract" + (o.dupCancelled>1?"s":"") +
+      " also listed on the Cancelled tab " + (o.dupCancelled>1?"are":"is") +
+      " left out of Live/Completed figures — delete the old row in the sheet to tidy this up.");
+  qn.hidden = !notes.length;
+  qn.textContent = notes.join(" ");
 
   /* KPI tiles */
   var s = $("ovStats"); s.innerHTML = "";
@@ -1206,6 +1256,11 @@ function renderOverview(){
      "ETD → ETA");
   op("Live shipments overdue", String(o.overdue),
      "Arrived 14+ days ago, no final docs" + (o.liveCount ? " · of " + o.liveCount + " live" : ""));
+  var nAll = o.live.length + o.comp.length + o.cancelled.length;
+  op("Cancelled contracts", o.cancelledErr ? "—" : String(o.cancelled.length),
+     o.cancelledErr ? "Cancelled tab not loaded"
+       : (o.cancelledMT ? qty(o.cancelledMT) + " MT contracted · " : "") +
+         (nAll ? Math.round(100*o.cancelled.length/nAll) + "% of all contracts" : "Not counted in revenue"));
 
   /* needs-follow-up list */
   var flCard = $("cardFollowup"), fl = $("ovFollowup");

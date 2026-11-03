@@ -7,7 +7,7 @@
    the app's own existing "Could not load this tab" / "Sync failed" states,
    which is the honest behavior. */
 
-var SHELL_CACHE = "rinox-shell-v1";
+var SHELL_CACHE = "rinox-shell-v2";
 var SHELL_FILES = [
   "./",
   "./index.html",
