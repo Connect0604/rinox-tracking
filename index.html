@@ -311,6 +311,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     <div class="sp"></div>
     <div class="fx" id="fxBadge" hidden></div>
     <div class="sync"><span class="dot busy" id="dot"></span><span id="syncTxt">Loading…</span></div>
+    <select id="fYear" aria-label="Filter by year" hidden></select>
     <button class="btn" id="refresh">Refresh</button>
     <a class="btn" id="sheetLink" target="_blank" rel="noopener">Open sheet ↗</a>
   </header>
@@ -479,6 +480,8 @@ var TABS = [
    a column in Sheets does not break the mapping. `occ` disambiguates the two
    columns the sheet both names FINAL DESTINATION. */
 var SHIPMENT_FIELDS = [
+  /* noAny: a year typed down a column must not make an otherwise blank row a record */
+  { k:"year",         h:["YEAR"],                        g:"Contract",  lbl:"Year", noAny:1 },
   { k:"tsNo",         h:["TSNO"],                        g:"Contract",  lbl:"TS no" },
   { k:"supplier",     h:["SUPPLIERNAME"],                g:"Contract",  lbl:"Supplier" },
   { k:"buyer",        h:["BUYERNAME"],                   g:"Contract",  lbl:"Buyer" },
@@ -519,6 +522,7 @@ var SHIPMENT_FIELDS = [
 ];
 
 var CLAIM_FIELDS = [
+  { k:"year",       h:["YEAR"],             g:"Claim", lbl:"Year", noAny:1 },
   { k:"buyer",      h:["BUYERNAME"],        g:"Claim", lbl:"Buyer" },
   { k:"contractNo", h:["CONTRACTNO"],       g:"Claim", lbl:"Contract no" },
   { k:"material",   h:["MATERIAL"],         g:"Claim", lbl:"Material" },
@@ -732,7 +736,7 @@ function parseRecords(table, defs, kind){
     var get = function(k){ return map[k]===undefined ? null : cells[map[k]]; };
 
     var startsNew = idKeys.some(function(k){ return cellText(get(k)) !== ""; });
-    var any = defs.some(function(d){ return cellText(get(d.k)) !== ""; });
+    var any = defs.some(function(d){ return !d.noAny && cellText(get(d.k)) !== ""; });
     if(!any) return;
     if(!startsNew && recs.length === 0) startsNew = true;
 
@@ -762,7 +766,7 @@ function parseRecords(table, defs, kind){
   /* Rows holding nothing but a TS number are placeholders typed ahead of the
      contract; they are not shipments. */
   recs = recs.filter(function(rec){
-    return Object.keys(rec.vals).some(function(k){ return k !== "tsNo"; })
+    return Object.keys(rec.vals).some(function(k){ return k !== "tsNo" && k !== "year"; })
         || Object.keys(rec.sum).length > 0;
   });
 
@@ -824,7 +828,35 @@ var state = { tab:tabFromHash(), data:{}, err:{}, diag:{}, sort:{}, q:"", suppli
 var today = new Date(); today.setHours(0,0,0,0);
 
 function current(){ return TABS.filter(function(t){ return t.key===state.tab; })[0]; }
-function recs(key){ return state.data[key] || []; }
+/* ---- year filter ----
+   One global Year selector. A tab with no Year values at all (column not added
+   there yet) is left unfiltered and the Overview says so, rather than being
+   emptied. Records with no year are hidden while a year is selected. */
+var YEAR_KEY = "rinox_year_v1";
+try{ state.year = localStorage.getItem(YEAR_KEY) || ""; }catch(e){ state.year = ""; }
+function rawRecs(key){ return state.data[key] || []; }
+function tabHasYear(key){ return rawRecs(key).some(function(r){ return v(r,"year"); }); }
+function allYears(){
+  var seen = {}, out = [];
+  ["live","completed","cancelled","claims"].forEach(function(k){
+    rawRecs(k).forEach(function(r){ var y = v(r,"year"); if(y && !seen[y]){ seen[y] = 1; out.push(y); } });
+  });
+  return out.sort().reverse();
+}
+function recs(key){
+  var a = rawRecs(key);
+  if(!state.year || !tabHasYear(key)) return a;
+  return a.filter(function(r){ return v(r,"year") === state.year; });
+}
+function renderYear(){
+  var sel = $("fYear"), years = allYears();
+  if(state.year && years.indexOf(state.year) === -1) state.year = "";
+  sel.hidden = !years.length;
+  sel.innerHTML = "";
+  sel.appendChild(new Option("All years", ""));
+  years.forEach(function(y){ sel.appendChild(new Option(y, y)); });
+  sel.value = state.year;
+}
 
 /* ============================ loading ============================ */
 /* Sync progress bar — same track YouTube/GitHub use: trailing increments
@@ -1166,6 +1198,17 @@ function renderOverview(){
 
   /* data-quality note */
   var qn = $("ovQuality"), notes = [];
+  if(state.year){
+    notes.push("Showing " + state.year + " only.");
+    var noYr = ["live","completed","cancelled"].filter(function(k){ return !state.err[k] && !tabHasYear(k) && rawRecs(k).length; })
+      .map(function(k){ return k.charAt(0).toUpperCase()+k.slice(1); });
+    if(rawRecs("claims").length && !tabHasYear("claims")) noYr.push("Claims");
+    if(noYr.length) notes.push(noYr.join(", ") + " ha" + (noYr.length>1?"ve":"s") + " no Year column, so " +
+      (noYr.length>1?"they are":"it is") + " shown for all years.");
+    var hid = ["live","completed","cancelled","claims"].reduce(function(a,k){
+      return a + (tabHasYear(k) ? rawRecs(k).filter(function(r){ return !v(r,"year"); }).length : 0); }, 0);
+    if(hid) notes.push(hid + " record" + (hid>1?"s":"") + " without a Year " + (hid>1?"are":"is") + " not included.");
+  }
   if(o.excluded)
     notes.push(o.excluded + " legacy record" + (o.excluded>1?"s":"") +
       " excluded from the figures below (a pre-2026 column shift in the sheet — see the Completed tab, oldest rows).");
@@ -1956,6 +1999,7 @@ function renderAll(){
   $("overviewWrap").hidden = !isOverview;
   $("toolsWrap").hidden = isOverview;
   $("tableWrapEl").hidden = isOverview;
+  renderYear();
   renderTabs();
   if(isOverview) renderOverview();
   else { renderFilters(); renderTable(); }
@@ -1963,6 +2007,11 @@ function renderAll(){
 
 $("sheetLink").href = SHEET_URL;
 $("refresh").onclick = function(){ load(); };
+$("fYear").onchange = function(){
+  state.year = this.value;
+  try{ localStorage.setItem(YEAR_KEY, state.year); }catch(e){}
+  renderAll();
+};
 $("clear").onclick = function(){
   state.q = ""; $("q").value = "";
   $("fSupplier").value = $("fBuyer").value = $("fOrigin").value = "";

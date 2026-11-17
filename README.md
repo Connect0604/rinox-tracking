@@ -41,6 +41,22 @@ Two upstream data quirks are corrected for in this view, not just displayed:
   completed contract with a balance and **no** such remark lands in "Needs
   follow-up" instead of being silently counted as paid.
 
+## Year filter
+
+If the sheet has a **YEAR** column (e.g. `2026-2027`), a year selector appears
+in the header (hidden until a year is found). It filters the Overview figures,
+every chart and the Live / Completed / Cancelled tables, and the choice is
+remembered on that device. Notes under the Overview tiles say what is being
+shown. Rules:
+
+- A tab with **no** Year column (or no year values yet) is left unfiltered and
+  the note says so — it is never emptied.
+- While a year is selected, rows with a blank Year are not included; the note
+  says how many.
+- A row holding only a year (typed down the column) is ignored, like a row
+  holding only a TS number.
+- Year is also shown in the detail panel and the CSV export.
+
 ## Cancelled tab
 
 The **Cancelled** tab reads the sheet's `CANCELLED` tab (any capitalisation)
